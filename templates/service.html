@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}Сервис - Склад одежды{% endblock %}
+
+{% block content %}
+<div class="service-functions">
+    <h1 class="page-title">🔧 Сервисные функции</h1>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem;">
+        <!-- Бэкап -->
+        <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
+            <h3 style="color: var(--dark); margin-bottom: 1rem;">💾 Полный бэкап</h3>
+            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
+            Создание резервной копии всей базы данных в формате .backup
+            </p>
+            <div style="background: var(--light); padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
+                <small>📁 Папка: backups/YYYYMMDD_HHMMSS/</small>
+            </div>
+            <button onclick="createBackup()" class="btn btn-primary" style="width: 100%;">
+                🚀 Создать бэкап
+            </button>
+            <div id="backupResult" style="margin-top: 1rem;"></div>
+        </div>
+        
+        <!-- Восстановление -->
+        <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
+            <h3 style="color: var(--dark); margin-bottom: 1rem;">🔄 Восстановление</h3>
+            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
+            Восстановить БД из .backup файла
+            </p>
+            <div style="background: #fff2f0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem; border-left: 4px solid var(--danger);">
+                <small style="color: var(--danger);">⚠️ Все текущие данные будут заменены!</small>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <input type="file" id="backupFile" accept=".backup" class="form-control">
+            </div>
+            <button onclick="restoreBackup()" class="btn" style="width: 100%; background: var(--accent); color: var(--dark);">
+                📂 Восстановить
+            </button>
+            <div id="restoreResult" style="margin-top: 1rem;"></div>
+        </div>
+        
+        <!-- Архивация таблиц -->
+        <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
+            <h3 style="color: var(--dark); margin-bottom: 1rem;">📦 Архивация таблиц</h3>
+            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
+            Бэкап + Excel + JSON + удаление из БД
+            </p>
+            <div style="background: #fff2e0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
+                <small style="color: #b85c5c;">⚠️ Таблицы будут удалены после архивации!</small>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <select id="archiveTables" multiple style="width: 100%; height: 120px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                    {% for table in tables %}
+                    <option value="{{ table }}">{{ table }}</option>
+                    {% endfor %}
+                </select>
+                <small style="color: var(--dark); opacity: 0.6;">Удерживайте Ctrl/Cmd для выбора нескольких</small>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <button onclick="archiveSelected()" class="btn btn-sm" style="background: var(--dark); color: white; flex: 1;">
+                    📌 Выбранные
+                </button>
+                <button onclick="archiveAll()" class="btn btn-sm" style="background: var(--danger); color: white; flex: 1;">
+                    ⚠️ Все таблицы
+                </button>
+            </div>
+            <div id="archiveResult" style="margin-top: 1rem;"></div>
+        </div>
+        
+        <!-- Экспорт -->
+        <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
+            <h3 style="color: var(--dark); margin-bottom: 1rem;">📤 Экспорт таблиц</h3>
+            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
+            Экспорт без удаления из БД
+            </p>
+            <div style="margin-bottom: 1rem;">
+                <select id="exportTables" multiple style="width: 100%; height: 100px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                    {% for table in tables %}
+                    <option value="{{ table }}">{{ table }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem;">
+                <select id="exportFormat" style="padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                    <option value="excel">Excel (.xlsx)</option>
+                    <option value="json">JSON (.json)</option>
+                </select>
+                <button onclick="exportSelectedTables()" class="btn btn-success">
+                    ⬇️ Экспорт
+                </button>
+            </div>
+            <button onclick="exportAllTables()" class="btn btn-sm" style="width: 100%; background: var(--light);">
+                🌐 Экспорт всех таблиц
+            </button>
+        </div>
+        
+        <!-- Удаление таблицы -->
+        <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
+            <h3 style="color: var(--danger); margin-bottom: 1rem;">🗑️ Удаление таблицы</h3>
+            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
+            Полное удаление таблицы из БД (безвозвратно)
+            </p>
+            <div style="background: #fee2e2; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
+                <small style="color: var(--danger);">⚠️ Это действие нельзя отменить!</small>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <select id="deleteTable" class="form-control">
+                    <option value="">-- Выберите таблицу --</option>
+                    {% for table in tables %}
+                    <option value="{{ table }}">{{ table }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button onclick="deleteTable()" class="btn btn-danger" style="width: 100%;">
+                🔥 Удалить таблицу
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+async function createBackup() {
+    if (!confirm('Создать полный бэкап базы данных?')) return;
+    
+    const div = document.getElementById('backupResult');
+    div.innerHTML = '<div class="loading" style="padding: 0.8rem;">⏳ Создание бэкапа...</div>';
+    
+    const res = await fetch('/api/service/backup', {method: 'POST'});
+    const result = await res.json();
+    
+    if (result.success) {
+        div.innerHTML = `<div class="success" style="padding: 0.8rem;">✅ ${result.message}</div>`;
+    } else {
+        div.innerHTML = `<div class="error" style="padding: 0.8rem;">❌ ${result.error}</div>`;
+    }
+}
+
+async function restoreBackup() {
+    const fileInput = document.getElementById('backupFile');
+    if (!fileInput.files[0]) {
+        alert('Выберите файл .backup');
+        return;
+    }
+    
+    if (!confirm('⚠️ ВНИМАНИЕ! Все данные будут заменены. Продолжить?')) return;
+    
+    const div = document.getElementById('restoreResult');
+    div.innerHTML = '<div class="loading" style="padding: 0.8rem;">⏳ Восстановление...</div>';
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    const res = await fetch('/api/service/restore', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+        div.innerHTML = `<div class="success" style="padding: 0.8rem;">✅ ${result.message}</div>`;
+        setTimeout(() => location.reload(), 3000);
+    } else {
+        div.innerHTML = `<div class="error" style="padding: 0.8rem;">❌ ${result.error}</div>`;
+    }
+}
+
+async function archiveSelected() {
+    const select = document.getElementById('archiveTables');
+    const tables = Array.from(select.selectedOptions).map(o => o.value);
+    
+    if (tables.length === 0) {
+        alert('Выберите таблицы для архивации');
+        return;
+    }
+    
+    if (!confirm(`📦 Архивировать ${tables.length} таблиц(у)?\n\n⚠️ Таблицы будут УДАЛЕНЫ из БД!`)) return;
+    
+    const div = document.getElementById('archiveResult');
+    div.innerHTML = '<div class="loading" style="padding: 0.8rem;">⏳ Архивирование...</div>';
+    
+    const formData = new FormData();
+    formData.append('tables', JSON.stringify(tables));
+    formData.append('archive_all', 'false');
+    
+    const res = await fetch('/api/service/archive', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+        div.innerHTML = `<div class="success" style="padding: 0.8rem;">
+            ✅ ${result.message}<br>
+            📁 Папка: ${result.archive_dir}
+        </div>`;
+        setTimeout(() => location.reload(), 3000);
+    } else {
+        div.innerHTML = `<div class="error" style="padding: 0.8rem;">❌ ${result.error}</div>`;
+    }
+}
+
+async function archiveAll() {
+    if (!confirm('⚠️ АРХИВАЦИЯ ВСЕХ ТАБЛИЦ!\n\nВсе таблицы будут удалены из БД.\nПродолжить?')) return;
+    
+    const div = document.getElementById('archiveResult');
+    div.innerHTML = '<div class="loading" style="padding: 0.8rem;">⏳ Архивирование всех таблиц...</div>';
+    
+    const formData = new FormData();
+    formData.append('tables', '[]');
+    formData.append('archive_all', 'true');
+    
+    const res = await fetch('/api/service/archive', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+        div.innerHTML = `<div class="success" style="padding: 0.8rem;">
+            ✅ ${result.message}<br>
+            📁 Папка: ${result.archive_dir}
+        </div>`;
+        setTimeout(() => location.reload(), 3000);
+    } else {
+        div.innerHTML = `<div class="error" style="padding: 0.8rem;">❌ ${result.error}</div>`;
+    }
+}
+
+async function exportSelectedTables() {
+    const select = document.getElementById('exportTables');
+    const tables = Array.from(select.selectedOptions).map(o => o.value);
+    const format = document.getElementById('exportFormat').value;
+    
+    if (tables.length === 0) {
+        alert('Выберите таблицы для экспорта');
+        return;
+    }
+    
+    const formData = new FormData();
+    tables.forEach(t => formData.append('tables', t));
+    formData.append('format', format);
+    
+    const res = await fetch('/api/export/tables', {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `export_${Date.now()}.${format === 'excel' ? 'xlsx' : 'json'}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } else {
+        const err = await res.json();
+        alert('❌ ' + err.error);
+    }
+}
+
+function exportAllTables() {
+    const format = document.getElementById('exportFormat').value;
+    window.open(`/api/export/all/${format}`, '_blank');
+}
+
+async function deleteTable() {
+    const select = document.getElementById('deleteTable');
+    const table = select.value;
+    
+    if (!table) {
+        alert('Выберите таблицу');
+        return;
+    }
+    
+    if (!confirm(`🔥 УДАЛИТЬ ТАБЛИЦУ "${table}"?\n\nЭто действие необратимо!`)) return;
+    
+    const formData = new FormData();
+    formData.append('table', table);
+    
+    const res = await fetch('/api/table/delete', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+        alert('✅ ' + result.message);
+        location.reload();
+    } else {
+        alert('❌ ' + result.error);
+    }
+}
+</script>
+{% endblock %}

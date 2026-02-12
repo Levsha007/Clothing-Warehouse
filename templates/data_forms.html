@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block title %}Работа с данными - Склад одежды{% endblock %}
+
+{% block content %}
+<div class="data-forms">
+    <h1 class="page-title">Работа с данными</h1>
+    
+    <!-- Селектор таблиц -->
+    <div class="table-selector">
+        <span style="color: var(--dark); font-weight: 500; padding: 0.5rem 0;">Таблицы:</span>
+        {% for table in tables %}
+        <a href="/data?table={{ table }}" 
+           class="table-btn {% if current_table == table %}active{% endif %}">
+            {{ table }}
+        </a>
+        {% endfor %}
+    </div>
+    
+    {% if current_table %}
+    <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+        <!-- Заголовок -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="color: var(--dark); font-size: 1.3rem;">📁 {{ current_table }}</h3>
+            <span style="background: var(--light); padding: 0.4rem 1rem; border-radius: 40px; font-size: 0.9rem;">
+                Всего записей: <strong>{{ total_count }}</strong> | Страница {{ page }} из {{ total_pages }}
+            </span>
+        </div>
+        
+        <!-- Кнопки экспорта -->
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+            <button onclick="exportTable('excel')" class="btn btn-success btn-sm">
+                ⬇️ Excel
+            </button>
+            <button onclick="exportTable('json')" class="btn btn-sm" style="background: var(--accent); color: var(--dark);">
+                ⬇️ JSON
+            </button>
+        </div>
+        
+        <!-- Пагинация -->
+        {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+            <a href="/data?table={{ current_table }}&page=1" class="btn btn-sm">⏮️</a>
+            <a href="/data?table={{ current_table }}&page={{ page - 1 }}" class="btn btn-sm">◀️</a>
+            {% endif %}
+            
+            <span class="page-info">{{ page }} / {{ total_pages }}</span>
+            
+            {% if page < total_pages %}
+            <a href="/data?table={{ current_table }}&page={{ page + 1 }}" class="btn btn-sm">▶️</a>
+            <a href="/data?table={{ current_table }}&page={{ total_pages }}" class="btn btn-sm">⏭️</a>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <!-- Таблица данных -->
+        <div style="overflow-x: auto; margin-bottom: 2rem;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        {% for col in columns %}
+                        <th>{{ col.column_name }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in data %}
+                    <tr>
+                        {% for col in columns %}
+                        <td>
+                            {% if row[col.column_name] is none %}
+                                <span class="null-value">NULL</span>
+                            {% else %}
+                                {{ row[col.column_name] }}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="{{ columns|length }}" style="text-align: center; padding: 2rem; color: var(--dark); opacity: 0.6;">
+                            Нет данных в таблице
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Формы операций -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <!-- INSERT -->
+            <div class="form-card">
+                <h4 style="color: var(--dark); margin-bottom: 1rem;">➕ Добавить запись</h4>
+                <form id="insertForm" onsubmit="return insertData(event)">
+                    <input type="hidden" name="table" value="{{ current_table }}">
+                    <div style="display: grid; gap: 0.8rem; margin-bottom: 1.2rem; max-height: 300px; overflow-y: auto; padding-right: 0.5rem;">
+                        {% for col in columns %}
+                        {% if col.column_name not in ['id', 'created_at', 'updated_at'] %}
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--dark); margin-bottom: 0.25rem;">
+                                {{ col.column_name }}
+                                <span style="font-weight: normal; color: var(--dark); opacity: 0.6;">({{ col.data_type }})</span>
+                            </label>
+                            <input type="text" name="{{ col.column_name }}" 
+                                   placeholder="{{ col.column_name }}" 
+                                   class="form-control"
+                                   {% if col.is_nullable == 'NO' and not col.column_default %}required{% endif %}>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn btn-success" style="width: 100%;">Добавить</button>
+                </form>
+            </div>
+            
+            <!-- UPDATE -->
+            <div class="form-card">
+                <h4 style="color: var(--dark); margin-bottom: 1rem;">✏️ Обновить записи</h4>
+                <form id="updateForm" onsubmit="return updateData(event)">
+                    <input type="hidden" name="table" value="{{ current_table }}">
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-weight: 600; font-size: 0.9rem;">Условие WHERE</label>
+                        <input type="text" name="condition" placeholder="id = 1" class="form-control" required>
+                        <small style="color: var(--dark); opacity: 0.6;">Пример: id = 1 AND supplier_id = 2</small>
+                    </div>
+                    <div style="display: grid; gap: 0.8rem; margin-bottom: 1.2rem; max-height: 250px; overflow-y: auto; padding-right: 0.5rem;">
+                        {% for col in columns %}
+                        {% if col.column_name not in ['id', 'created_at', 'updated_at'] %}
+                        <div>
+                            <label style="font-size: 0.85rem; color: var(--dark);">{{ col.column_name }}</label>
+                            <input type="text" name="{{ col.column_name }}" 
+                                   placeholder="Новое значение (пусто = не менять)" 
+                                   class="form-control">
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%; background: var(--accent); color: var(--dark);">Обновить</button>
+                </form>
+            </div>
+            
+            <!-- DELETE -->
+            <div class="form-card">
+                <h4 style="color: var(--danger); margin-bottom: 1rem;">🗑️ Удалить записи</h4>
+                <form id="deleteForm" onsubmit="return deleteData(event)">
+                    <input type="hidden" name="table" value="{{ current_table }}">
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-weight: 600; font-size: 0.9rem;">Условие WHERE</label>
+                        <input type="text" name="condition" placeholder="id = 1" class="form-control" required>
+                    </div>
+                    <div style="margin-bottom: 1.2rem; background: #fff2f0; padding: 0.8rem; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="cascadeDelete" name="cascade">
+                            <span style="font-weight: 500;">⚠️ Каскадное удаление</span>
+                        </label>
+                        <small style="color: var(--danger); display: block; margin-top: 0.4rem;">
+                            Удалит также все связанные записи!
+                        </small>
+                    </div>
+                    <button type="submit" class="btn btn-danger" style="width: 100%;">Удалить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 3rem; background: white; border-radius: 16px; border: 1px solid var(--border);">
+        <p style="font-size: 1.2rem; color: var(--dark); opacity: 0.6;">Выберите таблицу для работы</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function exportTable(format) {
+    const table = '{{ current_table }}';
+    if (table) {
+        window.open(`/api/export/table/${table}/${format}`, '_blank');
+    }
+}
+
+async function insertData(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'table' && value.trim() !== '') {
+            data[key] = value;
+        }
+    }
+    
+    if (Object.keys(data).length === 0) {
+        alert('Заполните хотя бы одно поле');
+        return;
+    }
+    
+    const response = await fetch('/api/data/insert', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+            table: formData.get('table'),
+            data: JSON.stringify(data)
+        })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+        alert('✅ ' + result.message);
+        location.reload();
+    } else {
+        alert('❌ ' + result.error);
+    }
+}
+
+async function updateData(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const data = {};
+    
+    for (let [key, value] of formData.entries()) {
+        if (key !== 'table' && key !== 'condition' && value.trim() !== '') {
+            data[key] = value;
+        }
+    }
+    
+    if (Object.keys(data).length === 0) {
+        alert('Заполните хотя бы одно поле для обновления');
+        return;
+    }
+    
+    const condition = formData.get('condition');
+    if (!condition || condition.trim() === '') {
+        alert('Условие WHERE обязательно');
+        return;
+    }
+    
+    const response = await fetch('/api/data/update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+            table: formData.get('table'),
+            data: JSON.stringify(data),
+            condition: condition
+        })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+        alert('✅ ' + result.message);
+        location.reload();
+    } else {
+        alert('❌ ' + result.error);
+    }
+}
+
+async function deleteData(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const condition = formData.get('condition');
+    const cascade = document.getElementById('cascadeDelete')?.checked || false;
+    
+    if (!condition || condition.trim() === '') {
+        alert('Условие WHERE обязательно');
+        return;
+    }
+    
+    let message = cascade 
+        ? '⚠️ ВНИМАНИЕ! Каскадное удаление удалит ВСЕ связанные записи.\n\nПродолжить?'
+        : 'Удалить записи по условию: ' + condition + '?';
+    
+    if (!confirm(message)) return;
+    
+    const response = await fetch('/api/data/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({
+            table: formData.get('table'),
+            condition: condition,
+            cascade: cascade
+        })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+        alert('✅ ' + result.message);
+        location.reload();
+    } else {
+        if (result.has_dependencies) {
+            let depMsg = '❌ Нельзя удалить: есть зависимые записи:\n';
+            result.dependencies.forEach(d => {
+                depMsg += `\n• ${d.table}: ${d.count} записей`;
+            });
+            depMsg += '\n\nИспользуйте каскадное удаление.';
+            alert(depMsg);
+        } else {
+            alert('❌ ' + result.error);
+        }
+    }
+}
+</script>
+{% endblock %}

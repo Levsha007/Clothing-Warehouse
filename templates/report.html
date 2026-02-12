@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Отчет о качестве продукции{% endblock %}
+
+{% block content %}
+<div class="report-container">
+    <div class="report-header">
+        <h1 class="report-title">Отчет о качестве продукции</h1>
+        <p class="report-subtitle">Склад готовой продукции — Одежда (Вариант 19)</p>
+        <p class="report-date">Дата формирования: {{ date }}</p>
+    </div>
+    
+    <div class="report-info-grid">
+        <div class="report-info-card">
+            <h3 class="info-label">Поставщик</h3>
+            <p class="info-value">{{ supplier.name }}</p>
+        </div>
+        <div class="report-info-card">
+            <h3 class="info-label">Продукция</h3>
+            <p class="info-value">{{ product.name }}</p>
+        </div>
+    </div>
+    
+    <div class="report-results">
+        <div class="results-header">
+            <h3 class="results-title">Результаты пороговой диагностики</h3>
+            <div class="verdict-badge {% if metrics.is_quality %}verdict-good{% else %}verdict-bad{% endif %}">
+                {{ metrics.verdict }}
+            </div>
+        </div>
+        
+        <div class="metrics-grid">
+            <div class="metric-item">
+                <div class="metric-label">Сигнал нормы (Ch)</div>
+                <div class="metric-value">{{ metrics.Ch }}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Сигнал отклонения (Co)</div>
+                <div class="metric-value">{{ metrics.Co }}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Отношение Go</div>
+                <div class="metric-value">{{ metrics.Go }}</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-label">Вероятность P</div>
+                <div class="metric-value">{{ metrics.P }}</div>
+            </div>
+        </div>
+        
+        <h4 class="chars-title">Характеристики продукции</h4>
+        <div class="table-responsive">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Характеристика</th>
+                        <th>Ед. изм.</th>
+                        <th>Норма (min-max)</th>
+                        <th>Реальное</th>
+                        <th>Градации (n)</th>
+                        <th>log₂(n)</th>
+                        <th>Вес</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in characteristics %}
+                    <tr {% if c.real < c.min or c.real > c.max %}class="deviation-row"{% endif %}>
+                        <td><strong>{{ c.name }}</strong></td>
+                        <td>{{ c.unit or '-' }}</td>
+                        <td>{{ c.min }} — {{ c.max }}</td>
+                        <td class="real-value {% if c.real < c.min or c.real > c.max %}deviation-value{% endif %}">
+                            {{ c.real }}
+                        </td>
+                        <td>{{ c.gradations }}</td>
+                        <td>{{ c.log2 }}</td>
+                        <td>{{ c.weight }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="report-footer">
+            <p><strong>Параметры расчета:</strong> шаг Δx = {{ delta_x }}</p>
+            <p class="rule-description">Пороговое правило: P ≤ 0.5 → продукция качественная</p>
+        </div>
+    </div>
+    
+    <div class="report-actions">
+        <button onclick="window.print()" class="btn btn-primary">
+            🖨️ Печать отчета
+        </button>
+        <a href="/spzr" class="btn">
+            ← Новый анализ
+        </a>
+    </div>
+</div>
+{% endblock %}

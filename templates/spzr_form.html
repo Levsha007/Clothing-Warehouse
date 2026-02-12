@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}СППР - Оценка качества одежды{% endblock %}
+
+{% block content %}
+<div class="spzr-page">
+    <h1 class="page-title">Система поддержки принятия решений</h1>
+    <p class="subtitle">Пороговый метод диагностики качества продукции (Вариант 19 - Склад одежды)</p>
+    
+    <div class="card" style="max-width: 600px; margin: 2rem auto;">
+        <h3 style="margin-bottom: 1.5rem; color: var(--dark);">Анализ продукции</h3>
+        
+        <form id="qualityForm" onsubmit="analyzeQuality(event)">
+            <div class="form-group">
+                <label>Поставщик</label>
+                <select id="supplierSelect" class="form-control" required>
+                    <option value="">-- Выберите поставщика --</option>
+                    {% for s in suppliers %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Продукция</label>
+                <select id="productSelect" class="form-control" required>
+                    <option value="">-- Выберите продукцию --</option>
+                    {% for p in products %}
+                    <option value="{{ p.id }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Шаг измерения Δx (чувствительность)</label>
+                <input type="number" id="deltaX" class="form-control" value="1.0" step="0.1" min="0.1">
+                <small>Меньше значение = выше чувствительность к отклонениям</small>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Оценить качество</button>
+                <button type="button" class="btn" onclick="trainSystem()">Обучение СППР</button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="resultContainer" style="display: none;">
+        <!-- Результаты подгрузятся через JS -->
+    </div>
+</div>
+
+<script>
+async function analyzeQuality(e) {
+    e.preventDefault();
+    
+    const supplier = document.getElementById('supplierSelect').value;
+    const product = document.getElementById('productSelect').value;
+    const delta = document.getElementById('deltaX').value;
+    
+    if (!supplier || !product) {
+        alert('Выберите поставщика и продукцию');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('supplier_id', supplier);
+    formData.append('product_id', product);
+    formData.append('delta_x', delta);
+    
+    const response = await fetch('/api/spzr/analyze', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+        displayResults(result, supplier, product, delta);
+    } else {
+        alert('Ошибка: ' + result.error);
+    }
+}
+
+function displayResults(data, supplierId, productId, delta) {
+    const chars = data.characteristics;
+    const metrics = data.metrics;
+    
+    let html = `
+        <div class="card" style="margin-top: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3>Результаты анализа</h3>
+                <span style="background: ${metrics.is_quality ? '#5a7a6b' : '#b85c5c'}; color: white; padding: 0.5rem 1.2rem; border-radius: 40px; font-weight: 600;">
+                    ${metrics.verdict}
+                </span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; background: var(--light); padding: 1.5rem; border-radius: 16px;">
+                <div><strong>Сигнал нормы (Ch):</strong> ${metrics.Ch}</div>
+                <div><strong>Сигнал отклонения (Co):</strong> ${metrics.Co}</div>
+                <div><strong>Отношение Go:</strong> ${metrics.Go}</div>
+                <div><strong>Вероятность P:</strong> ${metrics.P}</div>
+                <div><strong>Шаг Δx:</strong> ${metrics.delta_x}</div>
+            </div>
+            
+            <h4 style="margin-bottom: 1rem;">Детализация по характеристикам</h4>
+            <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Характеристика</th>
+                            <th>Ед.</th>
+                            <th>Норма (min-max)</th>
+                            <th>Реальное</th>
+                            <th>Градации n</th>
+                            <th>log₂(n)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    chars.forEach(c => {
+        const isNorm = c.real >= c.min && c.real <= c.max;
+        html += `<tr ${!isNorm ? 'style="background: #fff2f0;"' : ''}>
+            <td><strong>${c.name}</strong></td>
+            <td>${c.unit || '-'}</td>
+            <td>${c.min} – ${c.max}</td>
+            <td style="font-weight: 600; ${!isNorm ? 'color: #b85c5c;' : ''}">${c.real}</td>
+            <td>${c.gradations}</td>
+            <td>${c.log2}</td>
+        </tr>`;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; margin-top: 2rem; justify-content: flex-end;">
+                <a href="/spzr/report?supplier_id=${supplierId}&product_id=${productId}&delta_x=${delta}" 
+                   class="btn btn-primary" target="_blank">
+                    📄 Открыть отчет
+                </a>
+                <button onclick="window.print()" class="btn">🖨️ Печать</button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('resultContainer').innerHTML = html;
+    document.getElementById('resultContainer').style.display = 'block';
+}
+
+async function trainSystem() {
+    const supplier = document.getElementById('supplierSelect').value;
+    const product = document.getElementById('productSelect').value;
+    const delta = parseFloat(document.getElementById('deltaX').value);
+    
+    if (!supplier || !product) {
+        alert('Выберите поставщика и продукцию');
+        return;
+    }
+    
+    const targetQuality = confirm('Обучить систему считать ЭТОТ продукт КАЧЕСТВЕННЫМ? (Нажмите ОК - качественный, Отмена - брак)');
+    
+    const formData = new FormData();
+    formData.append('supplier_id', supplier);
+    formData.append('product_id', product);
+    formData.append('target_quality', targetQuality);
+    formData.append('current_delta', delta);
+    
+    const response = await fetch('/api/spzr/train', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (result.success && result.found) {
+        document.getElementById('deltaX').value = result.delta;
+        alert(`✅ Система обучена! Подобран шаг Δx = ${result.delta}\nВероятность P = ${result.probability}`);
+        analyzeQuality(new Event('submit'));
+    } else {
+        alert('❌ Не удалось подобрать параметры. Попробуйте изменить Δx вручную.');
+    }
+}
+</script>
+
+<style>
+.spzr-page .subtitle {
+    color: var(--dark);
+    opacity: 0.7;
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+}
+.form-group {
+    margin-bottom: 1.25rem;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--dark);
+}
+</style>
+{% endblock %}

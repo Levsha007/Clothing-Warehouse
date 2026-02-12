@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - Склад одежды{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1 class="page-title">Склад готовой продукции — Одежда</h1>
+    <p style="color: var(--dark); opacity: 0.7; margin-bottom: 2rem; font-size: 1.1rem;">
+        Вариант 19 • Система поддержки принятия решений (пороговый метод)
+    </p>
+    
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h3 style="color: var(--dark); margin-bottom: 0.5rem;">📦 Таблицы в БД</h3>
+            <p style="font-size: 2.5rem; font-weight: 700; color: var(--dark); margin: 0.5rem 0;">{{ tables|length }}</p>
+            <a href="/data" class="btn btn-primary" style="margin-top: 0.75rem;">Управление данными</a>
+        </div>
+        
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h3 style="color: var(--dark); margin-bottom: 0.5rem;">📊 СППР</h3>
+            <p style="font-size: 1.2rem; font-weight: 500; margin: 0.5rem 0;">Пороговая диагностика</p>
+            <a href="/spzr" class="btn btn-success" style="margin-top: 0.75rem;">Оценить качество</a>
+        </div>
+        
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h3 style="color: var(--dark); margin-bottom: 0.5rem;">💾 Сервис</h3>
+            <p style="font-size: 1.2rem; font-weight: 500; margin: 0.5rem 0;">Бэкап / Архивация</p>
+            <a href="/service" class="btn" style="margin-top: 0.75rem; background: var(--accent); color: var(--dark);">Перейти</a>
+        </div>
+    </div>
+    
+    <div class="card" style="background: white; border-radius: 16px; padding: 1.75rem;">
+        <h3 style="color: var(--dark); margin-bottom: 1.25rem;">📋 Список таблиц</h3>
+        
+        {% if tables %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem;">
+            {% for table in tables %}
+            <div style="background: var(--light); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border); transition: 0.2s;">
+                <h4 style="color: var(--dark); margin-bottom: 0.5rem; font-weight: 600;">{{ table }}</h4>
+                <p style="color: var(--dark); opacity: 0.7; font-size: 0.9rem; margin-bottom: 1rem;">
+                    Записей: <strong>{{ table_counts.get(table, 0) }}</strong>
+                </p>
+                <div style="display: flex; gap: 0.5rem;">
+                    <a href="/data?table={{ table }}" class="btn btn-sm" style="background: white;">📄 Данные</a>
+                    <a href="/query?table={{ table }}" class="btn btn-sm" style="background: white;">🔍 Запрос</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="text-align: center; padding: 2rem; color: var(--dark); opacity: 0.6;">
+            Нет доступных таблиц. Инициализация БД произойдет автоматически.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
