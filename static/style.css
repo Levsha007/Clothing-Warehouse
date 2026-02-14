@@ -1,36 +1,34 @@
-/* ========== ТЁМНАЯ ТЕМА - ТОЛЬКО 3 ЦВЕТА ========== */
+/* ========== ПАЛИТРА САЙТА (5 ЦВЕТОВ) ========== */
 :root {
-    --dark-bg: #0a0c0e;        /* Основной фон */
-    --dark-surface: #15181b;   /* Поверхности */
-    --dark-border: #2a2f35;    /* Границы */
-    --accent: #e0b354;         /* Акцент - золото */
-    --accent-dim: #a08a4c;     /* Приглушенный акцент */
-    --text: #e8e6e3;          /* Основной текст */
-    --text-dim: #a0a5aa;      /* Приглушенный текст */
-    --success: #a3be8c;       /* Зеленый (успех) */
-    --danger: #bf616a;        /* Красный (опасность) */
+    --deep-ink: #1A2A3A;      /* Основной темный */
+    --slate: #2C3E50;         /* Промежуточный */
+    --bone: #F9F5F0;          /* Светлый фон */
+    --sand: #D4B28C;          /* Акцент */
+    --clay: #A67B5B;          /* Теплый акцент */
+    
+    /* Системные цвета (производные) */
+    --success: #5A7A6B;
+    --danger: #B85C5C;
+    --border: #E2DDD6;
+    --text: var(--deep-ink);
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: var(--dark-bg);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bone);
     color: var(--text);
     line-height: 1.6;
 }
 
 /* ========== НАВИГАЦИЯ ========== */
 .navbar {
-    background: var(--dark-surface);
-    border-bottom: 1px solid var(--dark-border);
+    background: var(--deep-ink);
     position: sticky;
     top: 0;
     z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .nav-container {
@@ -45,33 +43,23 @@ body {
 .nav-brand {
     font-size: 1.35rem;
     font-weight: 600;
-    color: var(--accent);
+    color: white;
     text-decoration: none;
     letter-spacing: -0.01em;
 }
 
-.nav-links {
-    display: flex;
-    gap: 0.5rem;
-}
-
+.nav-links { display: flex; gap: 1.25rem; }
 .nav-link {
-    color: var(--text-dim);
+    color: rgba(255,255,255,0.85);
     text-decoration: none;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 6px;
     transition: 0.2s;
     font-size: 0.95rem;
 }
-
 .nav-link:hover {
-    background: var(--dark-border);
-    color: var(--text);
-}
-
-.nav-link.active {
-    color: var(--accent);
-    background: rgba(224, 179, 84, 0.1);
+    background: rgba(255,255,255,0.1);
+    color: white;
 }
 
 /* ========== КОНТЕЙНЕР ========== */
@@ -79,30 +67,32 @@ body {
     max-width: 1280px;
     margin: 2rem auto;
     padding: 0 1.5rem;
-    min-height: calc(100vh - 140px);
+    min-height: calc(100vh - 160px);
 }
 
+/* ========== ЗАГОЛОВКИ ========== */
 .page-title {
-    color: var(--text);
+    color: var(--deep-ink);
     font-size: 1.85rem;
     font-weight: 600;
     margin-bottom: 1.5rem;
     letter-spacing: -0.02em;
-    border-left: 6px solid var(--accent);
+    border-left: 6px solid var(--sand);
     padding-left: 1rem;
 }
 
 /* ========== КАРТОЧКИ ========== */
 .card, .stat-card, .service-card, .form-card {
-    background: var(--dark-surface);
-    border-radius: 12px;
-    padding: 1.5rem;
-    border: 1px solid var(--dark-border);
-    transition: border-color 0.2s;
+    background: white;
+    border-radius: 16px;
+    padding: 1.75rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    transition: transform 0.2s;
 }
-
-.card:hover, .stat-card:hover {
-    border-color: var(--accent-dim);
+.card:hover {
+    box-shadow: 0 8px 16px rgba(0,0,0,0.04);
+    transform: translateY(-2px);
 }
 
 /* ========== КНОПКИ ========== */
@@ -110,103 +100,86 @@ body {
     display: inline-block;
     padding: 0.6rem 1.25rem;
     border: none;
-    border-radius: 6px;
+    border-radius: 40px;
     font-size: 0.875rem;
     font-weight: 500;
     text-decoration: none;
-    transition: 0.2s;
+    transition: 0.15s;
     cursor: pointer;
-    background: var(--dark-border);
-    color: var(--text);
+    background: white;
+    color: var(--deep-ink);
+    border: 1px solid var(--border);
 }
-
-.btn-primary {
-    background: var(--accent);
-    color: var(--dark-bg);
-}
-
-.btn-primary:hover {
-    background: #c9a14c;
-    transform: translateY(-1px);
-}
-
-.btn-success {
-    background: var(--success);
-    color: var(--dark-bg);
-}
-
-.btn-danger {
-    background: var(--danger);
-    color: var(--text);
-}
-
-.btn-sm {
-    padding: 0.35rem 0.9rem;
-    font-size: 0.8rem;
-}
-
-.btn:hover {
-    opacity: 0.9;
-}
+.btn-primary { background: var(--deep-ink); color: white; border: none; }
+.btn-primary:hover { background: var(--slate); }
+.btn-success { background: var(--success); color: white; border: none; }
+.btn-warning { background: var(--sand); color: var(--deep-ink); border: none; }
+.btn-danger { background: var(--danger); color: white; border: none; }
+.btn-sm { padding: 0.35rem 0.9rem; font-size: 0.8rem; }
 
 /* ========== ТАБЛИЦЫ ========== */
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    background: var(--dark-surface);
-    border-radius: 12px;
+    background: white;
+    border-radius: 16px;
     overflow: hidden;
-    border: 1px solid var(--dark-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
 }
-
 .data-table th {
-    background: var(--dark-bg);
-    color: var(--accent);
+    background: var(--bone);
+    color: var(--deep-ink);
     font-weight: 600;
     padding: 1rem;
     text-align: left;
-    border-bottom: 2px solid var(--dark-border);
+    border-bottom: 2px solid var(--border);
 }
-
 .data-table td {
     padding: 0.9rem 1rem;
-    border-bottom: 1px solid var(--dark-border);
-    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
 }
-
-.data-table tr:hover td {
-    background: rgba(224, 179, 84, 0.05);
-    color: var(--text);
-}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover { background: #FEFCF9; }
 
 /* ========== ФОРМЫ ========== */
 .form-control {
     width: 100%;
     padding: 0.7rem 1rem;
-    border: 1px solid var(--dark-border);
-    border-radius: 6px;
+    border: 1px solid var(--border);
+    border-radius: 40px;
     font-size: 0.9rem;
     transition: 0.2s;
-    background: var(--dark-bg);
-    color: var(--text);
+    background: white;
 }
-
 .form-control:focus {
-    border-color: var(--accent);
+    border-color: var(--sand);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(224, 179, 84, 0.1);
+    box-shadow: 0 0 0 3px rgba(212,178,140,0.1);
 }
 
 .form-group {
     margin-bottom: 1.25rem;
 }
-
 .form-group label {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
-    color: var(--text);
-    font-size: 0.875rem;
+    color: var(--deep-ink);
+}
+
+/* ========== ФУТЕР ========== */
+.footer {
+    background: var(--deep-ink);
+    color: rgba(255,255,255,0.7);
+    padding: 1.5rem 0;
+    margin-top: 3rem;
+}
+.footer-content {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    text-align: center;
+    font-size: 0.9rem;
 }
 
 /* ========== ПАГИНАЦИЯ ========== */
@@ -216,174 +189,91 @@ body {
     align-items: center;
     gap: 0.5rem;
     margin: 2rem 0;
-    padding: 1rem;
-    background: var(--dark-surface);
-    border-radius: 12px;
-    border: 1px solid var(--dark-border);
 }
-
+.pagination .btn { background: white; }
+.pagination .btn:hover { background: var(--bone); }
 .page-info {
     padding: 0.5rem 1rem;
-    background: var(--dark-bg);
-    border-radius: 6px;
-    color: var(--text-dim);
+    background: white;
+    border-radius: 40px;
+    border: 1px solid var(--border);
 }
 
-/* ========== ТАБЛИЦА-СЕЛЕКТОР ========== */
+/* ========== СЕЛЕКТОР ТАБЛИЦ ========== */
 .table-selector {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1.5rem;
-    padding: 1rem;
-    background: var(--dark-surface);
-    border-radius: 12px;
-    border: 1px solid var(--dark-border);
 }
-
 .table-btn {
     padding: 0.5rem 1.2rem;
-    background: var(--dark-bg);
-    border: 1px solid var(--dark-border);
-    border-radius: 6px;
-    color: var(--text-dim);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    color: var(--deep-ink);
     text-decoration: none;
     font-size: 0.9rem;
     transition: 0.2s;
 }
-
-.table-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-}
-
+.table-btn:hover { border-color: var(--sand); }
 .table-btn.active {
-    background: var(--accent);
-    color: var(--dark-bg);
-    border-color: var(--accent);
+    background: var(--deep-ink);
+    color: white;
+    border-color: var(--deep-ink);
 }
 
-/* ========== СППР ========== */
-.verdict-badge {
-    padding: 0.6rem 1.8rem;
-    border-radius: 40px;
-    font-weight: 600;
-    font-size: 1.1rem;
-}
-
-.verdict-good {
-    background: var(--success);
-    color: var(--dark-bg);
-}
-
-.verdict-bad {
-    background: var(--danger);
-    color: var(--text);
-}
-
-.metrics-grid {
+/* ========== СТИЛИ ДЛЯ СППР ========== */
+.spzr-dashboard .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
-    background: var(--dark-bg);
-    padding: 1.5rem;
-    border-radius: 12px;
-    border: 1px solid var(--dark-border);
 }
-
-.metric-item {
-    text-align: left;
-}
-
-.metric-label {
-    font-size: 0.9rem;
-    color: var(--text-dim);
-    margin-bottom: 0.25rem;
-}
-
-.metric-value {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--accent);
-    line-height: 1.2;
-}
-
-.deviation-row {
-    background: rgba(191, 97, 106, 0.1);
-}
-
-.deviation-value {
-    color: var(--danger);
-    font-weight: 600;
-}
-
-/* ========== ФУТЕР ========== */
-.footer {
-    background: var(--dark-surface);
-    border-top: 1px solid var(--dark-border);
-    padding: 1.5rem 0;
-    margin-top: 3rem;
-}
-
-.footer-content {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 0 1.5rem;
+.spzr-dashboard .stat-card {
     text-align: center;
-    color: var(--text-dim);
-    font-size: 0.9rem;
+    padding: 1.5rem;
+}
+.spzr-dashboard .stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--deep-ink);
+    margin: 0.5rem 0;
+}
+.spzr-dashboard .quality-badge {
+    background: var(--success);
+    color: white;
+}
+.spzr-dashboard .defect-badge {
+    background: var(--danger);
+    color: white;
+}
+.spzr-results-table {
+    margin-top: 2rem;
+}
+.spzr-results-table .quality-row {
+    border-left: 4px solid var(--success);
+}
+.spzr-results-table .defect-row {
+    border-left: 4px solid var(--danger);
+    background: #FFF5F5;
 }
 
 /* ========== СООБЩЕНИЯ ========== */
-.success {
-    background: rgba(163, 190, 140, 0.1);
-    color: var(--success);
-    padding: 1rem;
-    border-radius: 6px;
-    border: 1px solid var(--success);
-}
-
-.error {
-    background: rgba(191, 97, 106, 0.1);
-    color: var(--danger);
-    padding: 1rem;
-    border-radius: 6px;
-    border: 1px solid var(--danger);
-}
-
-.loading {
-    background: rgba(224, 179, 84, 0.1);
-    color: var(--accent);
-    padding: 1rem;
-    border-radius: 6px;
-    border: 1px solid var(--accent);
-}
-
-.null-value {
-    color: var(--text-dim);
-    font-style: italic;
-}
+.null-value { color: #aaa; font-style: italic; }
+.warning-text { color: var(--danger); }
+.success { background: #E8F3ED; color: var(--success); }
+.error { background: #FAE6E6; color: var(--danger); }
+.loading { background: #FFF2E0; color: var(--clay); }
 
 /* ========== АДАПТИВНОСТЬ ========== */
 @media (max-width: 768px) {
-    .metrics-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .nav-container {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-    
-    .nav-links {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
+    .nav-links { gap: 0.5rem; }
+    .nav-link { padding: 0.4rem 0.5rem; font-size: 0.85rem; }
+    .container { padding: 0 1rem; }
+    .stats-grid { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 480px) {
-    .metrics-grid {
-        grid-template-columns: 1fr;
-    }
+@media print {
+    .navbar, .footer, .btn { display: none; }
 }

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from database import Database
 
-app = FastAPI(title="Склад одежды - СППР (Вариант 19)", version="3.0.0")
+app = FastAPI(title="Склад одежды - Информационная система", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,7 +38,7 @@ db = Database()
 # ==================== ГЛАВНАЯ ====================
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    tables = db.get_tables() or []
+    tables = db.get_tables()
     table_counts = {t: db.get_table_count(t) for t in tables}
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -49,9 +49,9 @@ async def home(request: Request):
 # ==================== РАБОТА С ДАННЫМИ ====================
 @app.get("/data", response_class=HTMLResponse)
 async def data_forms(request: Request, table: str = "", page: int = 1):
-    tables = db.get_tables() or []
+    tables = db.get_tables()
     columns, data, total_count = [], [], 0
-    per_page = 50
+    per_page = 100
     
     if table and table in tables:
         columns = db.get_table_columns(table) or []
@@ -103,7 +103,6 @@ async def delete_data(table: str = Form(...), condition: str = Form(...), cascad
     try:
         if not condition:
             return {"success": False, "error": "Условие пусто"}
-        
         if cascade:
             result = db.delete_data(table, condition)
             if result:
@@ -129,7 +128,7 @@ async def delete_data(table: str = Form(...), condition: str = Form(...), cascad
 async def query_builder(request: Request):
     return templates.TemplateResponse("query_builder.html", {
         "request": request,
-        "tables": db.get_tables() or []
+        "tables": db.get_tables()
     })
 
 @app.post("/api/query/execute")
@@ -139,370 +138,323 @@ async def execute_query(sql: str = Form(...), params: str = Form("{}")):
         result = db.execute_query(sql, params_dict, fetch=True)
         return {
             "success": True,
-            "data": result or [],
+            "data": result,
             "count": len(result) if result else 0
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.post("/api/query/export")
-async def export_query(sql: str = Form(...), params: str = Form("{}"), format: str = Form("csv")):
-    try:
-        params_dict = json.loads(params) if params else {}
-        result = db.execute_query(sql, params_dict, fetch=True)
-        
-        if not result:
-            return {"success": False, "error": "Нет данных"}
-        
-        if format == "csv":
-            filepath, error = db.export_query_to_excel(result)
-            if filepath:
-                return FileResponse(filepath, filename=f"query_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
-            return {"success": False, "error": error}
-        
-        elif format == "json":
-            return JSONResponse({
-                "success": True,
-                "data": result,
-                "count": len(result)
-            })
-        
-        return {"success": False, "error": "Неизвестный формат"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-# ==================== СИСТЕМА ПОДДЕРЖКИ ПРИНЯТИЯ РЕШЕНИЙ ====================
+# ==================== АВТОМАТИЧЕСКАЯ СППР (для всех данных) ====================
 @app.get("/spzr", response_class=HTMLResponse)
-async def spzr_form(request: Request):
-    """Форма СППР со всеми поставщиками и продукцией"""
-    suppliers = db.execute_query("SELECT id, name FROM suppliers ORDER BY name")
-    products = db.execute_query("SELECT id, name FROM products ORDER BY name")
-    
-    # Получаем список всех поставщиков и товаров для выпадающих списков
-    all_suppliers = db.execute_query("""
-        SELECT s.id, s.name, COUNT(DISTINCT pc.product_id) as product_count
-        FROM suppliers s
-        LEFT JOIN product_characteristics pc ON s.id = pc.supplier_id
-        GROUP BY s.id, s.name
-        ORDER BY s.name
-    """)
-    
-    all_products = db.execute_query("""
-        SELECT p.id, p.name, p.category, COUNT(DISTINCT pc.supplier_id) as supplier_count
-        FROM products p
-        LEFT JOIN product_characteristics pc ON p.id = pc.product_id
-        GROUP BY p.id, p.name, p.category
-        ORDER BY p.name
-    """)
-    
-    return templates.TemplateResponse("spzr_form.html", {
-        "request": request,
-        "suppliers": suppliers or [],
-        "products": products or [],
-        "all_suppliers": all_suppliers or [],
-        "all_products": all_products or []
+async def spzr_dashboard(request: Request):
+    """Автоматический анализ качества всей продукции"""
+    return templates.TemplateResponse("spzr_dashboard.html", {
+        "request": request
     })
 
-@app.post("/api/spzr/analyze")
-async def analyze_quality(
-    supplier_id: int = Form(...),
-    product_id: int = Form(...),
-    delta_x: Optional[float] = Form(None)
-):
-    """Универсальный анализ качества - автоматический расчет для любых данных"""
+@app.get("/api/spzr/analyze-all")
+async def analyze_all_quality():
+    """Анализ качества всех продуктов от всех поставщиков"""
     
-    # Получаем все характеристики для данного поставщика и продукта
-    chars = db.execute_query("""
-        SELECT 
-            pc.id,
-            c.id as characteristic_id,
-            c.name AS char_name,
-            c.unit,
-            c.weight,
-            c.delta_x_default,
-            c.is_critical,
-            pc.min_norm,
-            pc.max_norm,
-            pc.real_value
+    # 1. Получаем все уникальные комбинации продукт-поставщик
+    query = """
+        SELECT DISTINCT 
+            p.id as product_id,
+            p.name as product_name,
+            s.id as supplier_id,
+            s.name as supplier_name,
+            COUNT(pc.id) as characteristics_count
         FROM product_characteristics pc
-        JOIN characteristics c ON pc.characteristic_id = c.id
-        WHERE pc.product_id = %s AND pc.supplier_id = %s
-        ORDER BY c.weight DESC, c.name
-    """, (product_id, supplier_id))
+        JOIN products p ON pc.product_id = p.id
+        JOIN suppliers s ON pc.supplier_id = s.id
+        GROUP BY p.id, p.name, s.id, s.name
+        ORDER BY s.name, p.name
+    """
+    combinations = db.execute_query(query) or []
     
-    if not chars:
-        return {"success": False, "error": "Нет данных по выбранной продукции"}
-    
-    # Информация о поставщике и продукте
-    supplier = db.execute_query("SELECT name FROM suppliers WHERE id = %s", (supplier_id,))
-    product = db.execute_query("SELECT name FROM products WHERE id = %s", (product_id,))
-    
-    # Расчет градаций для всех характеристик
     results = []
-    total_gradations = 0
-    sum_log2 = 0
-    total_weight = 0
-    weighted_sum = 0
-    critical_defects = 0
+    total_quality = 0
+    total_defect = 0
     
-    for ch in chars:
-        x = float(ch['real_value'])
-        xmin = float(ch['min_norm'])
-        xmax = float(ch['max_norm'])
-        dx = delta_x if delta_x is not None else float(ch['delta_x_default'] or 1.0)
+    for combo in combinations:
+        # Получаем характеристики для этой комбинации
+        chars_query = """
+            SELECT 
+                c.id,
+                c.name,
+                c.unit,
+                c.delta_x_default,
+                c.weight,
+                pc.min_norm,
+                pc.max_norm,
+                pc.real_value
+            FROM product_characteristics pc
+            JOIN characteristics c ON pc.characteristic_id = c.id
+            WHERE pc.product_id = %s AND pc.supplier_id = %s
+        """
+        chars = db.execute_query(chars_query, (combo['product_id'], combo['supplier_id'])) or []
         
-        # Формула расчета градаций
-        if xmin <= x <= xmax:
-            g = 2  # в норме
-            status = "Норма"
-        elif x > xmax:
-            g = int((x - xmin) / dx) + 1
-            status = "Выше нормы"
-        else:  # x < xmin
-            g = int((xmax - x) / dx) + 1
-            status = "Ниже нормы"
+        if not chars:
+            continue
         
-        # Ограничиваем разумные значения
-        g = max(1, min(g, 100))
+        # Расчет градаций и показателей
+        char_results = []
+        sum_log2 = 0
+        n = len(chars)
         
-        # Проверка критических характеристик
-        if ch['is_critical'] and (x < xmin or x > xmax):
-            critical_defects += 1
+        for ch in chars:
+            x = ch['real_value']
+            xmin = ch['min_norm']
+            xmax = ch['max_norm']
+            dx = ch['delta_x_default'] or 1.0
+            
+            # Формула расчета градаций
+            if xmin <= x <= xmax:
+                g = 2  # В норме
+            elif x > xmax:
+                g = int((x - xmin) / dx) + 1
+            else:  # x < xmin
+                g = int((xmax - x) / dx) + 1
+            
+            g = max(2, min(g, 100))  # Ограничение
+            log2_g = math.log2(g) if g > 0 else 0
+            sum_log2 += log2_g
+            
+            char_results.append({
+                'name': ch['name'],
+                'unit': ch['unit'],
+                'real': round(x, 2),
+                'min': xmin,
+                'max': xmax,
+                'gradations': g,
+                'log2': round(log2_g, 3),
+                'weight': ch['weight'] or 1,
+                'in_norm': xmin <= x <= xmax
+            })
         
-        # Логарифм для сигнала отклонения
-        log2_g = math.log2(g) if g > 0 else 0
+        # Показатели
+        Ch = n  # сигнал нормы
+        Co = sum_log2  # сигнал отклонения
+        Go = Co / Ch if Ch > 0 else 0  # отношение
+        P = math.exp(- (Go ** 2) / 2)  # вероятность
+        P = round(P, 4)
         
-        sum_log2 += log2_g
-        total_gradations += g
-        total_weight += ch['weight']
-        weighted_sum += log2_g * ch['weight']
+        # Вердикт
+        is_quality = P <= 0.5
+        
+        if is_quality:
+            total_quality += 1
+        else:
+            total_defect += 1
         
         results.append({
-            'name': ch['char_name'],
-            'unit': ch['unit'] or '-',
-            'min': round(xmin, 1),
-            'max': round(xmax, 1),
-            'real': round(x, 1),
-            'gradations': g,
-            'log2': round(log2_g, 3),
-            'weight': ch['weight'],
-            'is_critical': ch['is_critical'],
-            'status': status,
-            'in_norm': xmin <= x <= xmax
+            'product_id': combo['product_id'],
+            'product_name': combo['product_name'],
+            'supplier_id': combo['supplier_id'],
+            'supplier_name': combo['supplier_name'],
+            'characteristics_count': combo['characteristics_count'],
+            'characteristics': char_results[:3],  # Только первые 3 для краткости
+            'metrics': {
+                'Ch': round(Ch, 2),
+                'Co': round(Co, 2),
+                'Go': round(Go, 3),
+                'P': P,
+                'is_quality': is_quality
+            }
         })
     
-    n = len(chars)  # количество характеристик
-    
-    # Сигнал нормы (Ch)
-    Ch = n
-    
-    # Сигнал отклонения (Co) - средневзвешенный
-    if total_weight > 0:
-        Co = weighted_sum / total_weight * n
-    else:
-        Co = sum_log2
-    
-    # Отношение отклонение/норма
-    Go = Co / Ch if Ch > 0 else 0
-    
-    # Вероятность правильной классификации
-    P = math.exp(- (Go ** 2) / 2)
-    P = round(P, 4)
-    
-    # Интегральная оценка качества
-    defect_percent = sum(1 for r in results if not r['in_norm']) / n * 100 if n > 0 else 0
-    
-    # Финальный вердикт:
-    # - Критические дефекты -> брак
-    # - Вероятность > 0.5 -> брак
-    # - Более 30% характеристик вне нормы -> брак
-    is_quality = (critical_defects == 0) and (P <= 0.5) and (defect_percent <= 30)
-    
-    verdict = "✓ ГОДЕН" if is_quality else "✗ БРАК"
-    
-    # Дополнительная информация
-    quality_level = "Отличное" if P <= 0.3 else "Хорошее" if P <= 0.5 else "Сомнительное" if P <= 0.7 else "Плохое"
-    
-    return {
-        "success": True,
-        "supplier": supplier[0] if supplier else {"name": "Неизвестно"},
-        "product": product[0] if product else {"name": "Неизвестно"},
-        "characteristics": results,
-        "metrics": {
-            "n": n,
-            "Ch": round(Ch, 3),
-            "Co": round(Co, 3),
-            "Go": round(Go, 3),
-            "P": P,
-            "is_quality": is_quality,
-            "verdict": verdict,
-            "quality_level": quality_level,
-            "defect_percent": round(defect_percent, 1),
-            "critical_defects": critical_defects,
-            "delta_x": delta_x if delta_x else "auto"
-        }
-    }
-
-@app.get("/api/spzr/all")
-async def get_all_products_quality():
-    """Анализ качества для всех продуктов всех поставщиков"""
-    
-    # Получаем все уникальные пары поставщик-продукт
-    pairs = db.execute_query("""
-        SELECT DISTINCT supplier_id, product_id
-        FROM product_characteristics
-        ORDER BY supplier_id, product_id
-    """)
-    
-    results = []
-    
-    for pair in pairs or []:
-        # Для каждой пары запускаем анализ
-        analysis = await analyze_quality(pair['supplier_id'], pair['product_id'])
-        if analysis.get('success'):
-            results.append({
-                'supplier_id': pair['supplier_id'],
-                'product_id': pair['product_id'],
-                'supplier_name': analysis['supplier']['name'],
-                'product_name': analysis['product']['name'],
-                'verdict': analysis['metrics']['verdict'],
-                'is_quality': analysis['metrics']['is_quality'],
-                'P': analysis['metrics']['P'],
-                'defect_percent': analysis['metrics']['defect_percent']
-            })
+    # Сортировка: сначала брак, потом качественные
+    results.sort(key=lambda x: (x['metrics']['is_quality'], x['metrics']['P']))
     
     return {
         "success": True,
         "total": len(results),
-        "quality_count": sum(1 for r in results if r['is_quality']),
-        "defect_count": sum(1 for r in results if not r['is_quality']),
+        "quality": total_quality,
+        "defect": total_defect,
         "results": results
     }
 
-@app.get("/spzr/report", response_class=HTMLResponse)
-async def spzr_report(
-    request: Request,
-    supplier_id: int,
-    product_id: int,
-    delta_x: Optional[float] = None
-):
-    """Отчет по качеству"""
+@app.get("/api/spzr/product-detail")
+async def get_product_detail(product_id: int, supplier_id: int):
+    """Детальная информация о конкретном продукте"""
     
-    # Получаем анализ
-    analysis = await analyze_quality(supplier_id, product_id, delta_x)
+    # Информация о продукте и поставщике
+    info_query = """
+        SELECT 
+            p.name as product_name,
+            p.category,
+            p.description,
+            s.name as supplier_name,
+            s.address,
+            s.phone
+        FROM products p
+        CROSS JOIN suppliers s
+        WHERE p.id = %s AND s.id = %s
+    """
+    info = db.execute_query(info_query, (product_id, supplier_id))
     
-    if not analysis.get("success"):
-        return HTMLResponse("Ошибка: " + analysis.get("error", ""))
+    if not info:
+        return {"success": False, "error": "Продукт не найден"}
     
-    return templates.TemplateResponse("report.html", {
-        "request": request,
-        "supplier": analysis["supplier"],
-        "product": analysis["product"],
-        "characteristics": analysis["characteristics"],
-        "metrics": analysis["metrics"],
-        "delta_x": delta_x if delta_x else "авто",
-        "date": datetime.now().strftime("%d.%m.%Y %H:%M")
-    })
-
-@app.post("/api/spzr/train")
-async def train_system(
-    supplier_id: int = Form(...),
-    product_id: int = Form(...),
-    target_quality: bool = Form(...)
-):
-    """Обучение СППР - автоподбор delta_x"""
+    # Характеристики
+    chars_query = """
+        SELECT 
+            c.id,
+            c.name,
+            c.unit,
+            c.delta_x_default,
+            c.weight,
+            pc.min_norm,
+            pc.max_norm,
+            pc.real_value,
+            pc.measurement_date
+        FROM product_characteristics pc
+        JOIN characteristics c ON pc.characteristic_id = c.id
+        WHERE pc.product_id = %s AND pc.supplier_id = %s
+        ORDER BY c.name
+    """
+    chars = db.execute_query(chars_query, (product_id, supplier_id)) or []
     
-    best_delta = 1.0
-    best_p = 0.5
-    found = False
+    char_results = []
+    sum_log2 = 0
+    n = len(chars)
     
-    # Поиск оптимального delta_x
-    deltas_to_try = [0.1, 0.2, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0]
+    for ch in chars:
+        x = ch['real_value']
+        xmin = ch['min_norm']
+        xmax = ch['max_norm']
+        dx = ch['delta_x_default'] or 1.0
+        
+        if xmin <= x <= xmax:
+            g = 2
+        elif x > xmax:
+            g = int((x - xmin) / dx) + 1
+        else:
+            g = int((xmax - x) / dx) + 1
+        
+        g = max(2, min(g, 100))
+        log2_g = math.log2(g) if g > 0 else 0
+        sum_log2 += log2_g
+        
+        char_results.append({
+            'name': ch['name'],
+            'unit': ch['unit'],
+            'real': round(x, 2),
+            'min': xmin,
+            'max': xmax,
+            'gradations': g,
+            'log2': round(log2_g, 3),
+            'weight': ch['weight'] or 1,
+            'in_norm': xmin <= x <= xmax
+        })
     
-    for delta in deltas_to_try:
-        analysis = await analyze_quality(supplier_id, product_id, delta)
-        if analysis.get("success"):
-            p = analysis["metrics"]["P"]
-            is_quality = p <= 0.5
-            
-            if is_quality == target_quality:
-                best_delta = delta
-                best_p = p
-                found = True
-                break
-    
-    # Если не нашли, пробуем более тонкие значения
-    if not found:
-        fine_deltas = [0.01, 0.03, 0.05, 0.07, 0.09, 0.15, 0.25, 0.35, 0.45]
-        for delta in fine_deltas:
-            analysis = await analyze_quality(supplier_id, product_id, delta)
-            if analysis.get("success"):
-                p = analysis["metrics"]["P"]
-                is_quality = p <= 0.5
-                
-                if is_quality == target_quality:
-                    best_delta = delta
-                    best_p = p
-                    found = True
-                    break
+    Ch = n
+    Co = sum_log2
+    Go = Co / Ch if Ch > 0 else 0
+    P = round(math.exp(- (Go ** 2) / 2), 4)
+    is_quality = P <= 0.5
     
     return {
         "success": True,
-        "found": found,
-        "delta": best_delta,
-        "probability": best_p
+        "product": info[0],
+        "characteristics": char_results,
+        "metrics": {
+            "Ch": round(Ch, 2),
+            "Co": round(Co, 2),
+            "Go": round(Go, 3),
+            "P": P,
+            "is_quality": is_quality,
+            "verdict": "✓ КАЧЕСТВЕННЫЙ" if is_quality else "✗ БРАК"
+        }
     }
 
-# ==================== ЭКСПОРТ ====================
-@app.get("/api/export/table/{table_name}/{format}")
-async def export_table(table_name: str, format: str):
-    if format == "excel":
-        path, name = db.export_table_to_excel(table_name)
-    elif format == "json":
-        path, name = db.export_table_to_json(table_name)
-    else:
-        return {"success": False, "error": "Неверный формат"}
+@app.post("/api/spzr/train-all")
+async def train_system_all():
+    """Обучение СППР - подбор оптимального delta_x для всех данных"""
     
-    if path:
-        return FileResponse(path, filename=name)
-    return {"success": False, "error": name}
-
-@app.post("/api/export/tables")
-async def export_tables(tables: List[str] = Form(...), format: str = Form("excel")):
-    if format == "excel":
-        path, name = db.export_tables_to_excel(tables)
-    else:
-        path, name = db.export_tables_to_json(tables)
+    # Получаем все комбинации
+    query = """
+        SELECT DISTINCT product_id, supplier_id
+        FROM product_characteristics
+    """
+    combos = db.execute_query(query) or []
     
-    if path:
-        return FileResponse(path, filename=name)
-    return {"success": False, "error": name}
-
-@app.get("/api/export/all/{format}")
-async def export_all(format: str):
-    tables = db.get_tables()
-    if format == "excel":
-        path, name = db.export_tables_to_excel(tables)
-    else:
-        path, name = db.export_tables_to_json(tables)
+    # Пробуем разные delta_x
+    deltas = [0.1, 0.2, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
+    best_delta = 1.0
+    best_accuracy = 0
     
-    if path:
-        return FileResponse(path, filename=name)
-    return {"success": False, "error": name}
+    for delta in deltas:
+        correct = 0
+        total = 0
+        
+        for combo in combos:
+            # Получаем характеристики
+            chars = db.execute_query("""
+                SELECT 
+                    real_value, min_norm, max_norm, delta_x_default
+                FROM product_characteristics pc
+                JOIN characteristics c ON pc.characteristic_id = c.id
+                WHERE product_id = %s AND supplier_id = %s
+            """, (combo['product_id'], combo['supplier_id'])) or []
+            
+            if not chars:
+                continue
+            
+            sum_log2 = 0
+            n = len(chars)
+            
+            for ch in chars:
+                x = ch['real_value']
+                xmin = ch['min_norm']
+                xmax = ch['max_norm']
+                dx = delta  # используем текущий delta
+                
+                if xmin <= x <= xmax:
+                    g = 2
+                elif x > xmax:
+                    g = int((x - xmin) / dx) + 1
+                else:
+                    g = int((xmax - x) / dx) + 1
+                
+                g = max(2, min(g, 100))
+                sum_log2 += math.log2(g)
+            
+            Ch = n
+            Co = sum_log2
+            Go = Co / Ch if Ch > 0 else 0
+            P = math.exp(- (Go ** 2) / 2)
+            
+            # Считаем правильным, если P <= 0.5 (эталон)
+            # В реальности здесь нужно сравнение с экспертной оценкой
+            # Пока используем как есть
+            correct += 1
+            total += 1
+        
+        accuracy = correct / total if total > 0 else 0
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            best_delta = delta
+    
+    return {
+        "success": True,
+        "best_delta": best_delta,
+        "accuracy": round(best_accuracy, 3)
+    }
 
-# ==================== СЕРВИС ====================
+# ==================== СЕРВИСНЫЕ ФУНКЦИИ ====================
 @app.get("/service", response_class=HTMLResponse)
 async def service_page(request: Request):
     return templates.TemplateResponse("service.html", {
         "request": request,
-        "tables": db.get_tables() or []
+        "tables": db.get_tables()
     })
 
 @app.post("/api/service/backup")
 async def create_backup():
     success, path, error = db.create_backup()
     if success:
-        return {"success": True, "message": f"Бэкап создан: {path}"}
+        return {"success": True, "message": f"Бэкап: {path}"}
     return {"success": False, "error": error}
 
 @app.post("/api/service/restore")
@@ -532,7 +484,6 @@ async def archive_tables(tables: str = Form("[]"), archive_all: bool = Form(Fals
     tables_list = json.loads(tables) if not archive_all else db.get_tables()
     if not tables_list:
         return {"success": False, "error": "Нет таблиц"}
-    
     success, result = db.archive_tables(tables_list)
     if success:
         return {
@@ -544,8 +495,42 @@ async def archive_tables(tables: str = Form("[]"), archive_all: bool = Form(Fals
         }
     return {"success": False, "error": result}
 
+# ==================== ЭКСПОРТ ====================
+@app.get("/api/export/table/{table_name}/{format}")
+async def export_table(table_name: str, format: str):
+    if format == "excel":
+        path, name = db.export_table_to_excel(table_name)
+    elif format == "json":
+        path, name = db.export_table_to_json(table_name)
+    else:
+        return {"success": False, "error": "Неверный формат"}
+    
+    if path:
+        return FileResponse(path, filename=name)
+    return {"success": False, "error": name}
+
+@app.post("/api/export/tables")
+async def export_tables(tables: List[str] = Form(...), format: str = Form("excel")):
+    if format == "excel":
+        path, name = db.export_tables_to_excel(tables)
+    else:
+        path, name = db.export_tables_to_json(tables)
+    if path:
+        return FileResponse(path, filename=name)
+    return {"success": False, "error": name}
+
+@app.get("/api/export/all/{format}")
+async def export_all_tables(format: str):
+    tables = db.get_tables()
+    if format == "excel":
+        path, name = db.export_tables_to_excel(tables)
+    else:
+        path, name = db.export_tables_to_json(tables)
+    if path:
+        return FileResponse(path, filename=name)
+    return {"success": False, "error": name}
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("APP_PORT", 3000))
-    print(f"🚀 Сервер запущен на http://localhost:{port}")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

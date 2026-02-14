@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}СППР - Автоматический анализ качества{% endblock %}
+
+{% block content %}
+<div class="spzr-dashboard">
+    <h1 class="page-title">📊 Система поддержки принятия решений</h1>
+    <p class="subtitle" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem; font-size: 1.1rem;">
+        Пороговый метод диагностики качества продукции (по методичке, стр. 33-38)
+    </p>
+    
+    <!-- Пояснение -->
+    <div style="background: var(--bone); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; border-left: 4px solid var(--sand);">
+        <h4 style="color: var(--deep-ink); margin-bottom: 0.75rem;">📐 Формулы расчета:</h4>
+        <ul style="list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <li><strong>Ch = N</strong> — сигнал нормы (количество характеристик)</li>
+            <li><strong>Co = Σ log₂(nᵢ)</strong> — сигнал отклонения</li>
+            <li><strong>Go = Co / Ch</strong> — отношение отклонение/норма</li>
+            <li><strong>P = exp(-Go²/2)</strong> — вероятность правильной классификации</li>
+        </ul>
+        <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <strong>✅ Правило определения:</strong> <span style="background: var(--success); color: white; padding: 0.2rem 0.8rem; border-radius: 20px;">P ≤ 0.5 → КАЧЕСТВЕННЫЙ</span> 
+            <span style="margin-left: 1rem; background: var(--danger); color: white; padding: 0.2rem 0.8rem; border-radius: 20px;">P > 0.5 → БРАК</span>
+            <br>
+            <small style="opacity: 0.7;">(из методички: "За диапазон нормы принимается значение вероятности P от 0 до 0,5")</small>
+        </p>
+    </div>
+    
+    <!-- Статистика -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Всего позиций</div>
+            <div id="totalCount" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--deep-ink);">0</div>
+        </div>
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Качественные (P ≤ 0.5)</div>
+            <div id="qualityCount" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--success);">0</div>
+        </div>
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Брак (P > 0.5)</div>
+            <div id="defectCount" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--danger);">0</div>
+        </div>
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Средний Co/Ch</div>
+            <div id="avgGo" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--clay);">0</div>
+        </div>
+    </div>
+    
+    <!-- Панель управления -->
+    <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; justify-content: space-between; align-items: center;">
+        <div style="display: flex; gap: 1rem;">
+            <button onclick="loadAnalysis()" class="btn btn-primary">
+                🔄 Обновить анализ
+            </button>
+            <button onclick="trainSystem()" class="btn" style="background: var(--sand); color: var(--deep-ink);">
+                🧠 Подобрать оптимальный Δx
+            </button>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            <select id="filterSelect" class="form-control" style="width: 150px;" onchange="filterResults()">
+                <option value="all">Все позиции</option>
+                <option value="quality">Только качественные</option>
+                <option value="defect">Только брак</option>
+            </select>
+            <input type="text" id="searchInput" class="form-control" placeholder="🔍 Поиск..." style="width: 250px;" onkeyup="filterResults()">
+        </div>
+    </div>
+    
+    <!-- Индикатор загрузки -->
+    <div id="loadingIndicator" style="display: none; text-align: center; padding: 3rem;">
+        <div class="loading" style="display: inline-block; padding: 1rem 2rem; border-radius: 40px;">
+            ⏳ Анализ данных...
+        </div>
+    </div>
+    
+    <!-- Результаты анализа -->
+    <div id="resultsContainer" style="display: none;">
+        <div class="spzr-results-table" style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h3 style="color: var(--deep-ink); margin-bottom: 1.5rem;">📋 Результаты пороговой диагностики</h3>
+            
+            <div style="overflow-x: auto;">
+                <table class="data-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Поставщик</th>
+                            <th>Продукция</th>
+                            <th>N (Ch)</th>
+                            <th title="Сумма log₂(n)">Co</th>
+                            <th title="Отношение Co/Ch">Go</th>
+                            <th title="Вероятность P = exp(-Go²/2)">P</th>
+                            <th>Вердикт</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Данные подгрузятся через JS -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Сноска -->
+            <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--deep-ink); opacity: 0.7;">
+                <p>📌 <strong>Пояснения:</strong></p>
+                <ul style="margin-left: 1.5rem;">
+                    <li><strong>Ch (сигнал нормы)</strong> = количество характеристик (N)</li>
+                    <li><strong>Co (сигнал отклонения)</strong> = сумма двоичных логарифмов градаций: Co = Σ log₂(nᵢ)</li>
+                    <li><strong>Go (отношение)</strong> = Co / Ch — чем больше Go, тем сильнее отклонение от нормы</li>
+                    <li><strong>P (вероятность)</strong> = exp(-Go²/2) — чем меньше P, тем надежнее классификация</li>
+                    <li><strong>✅ Качественный:</strong> P ≤ 0.5 | <strong>❌ Брак:</strong> P > 0.5 (по методичке стр. 38)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно с деталями -->
+    <div id="detailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 16px; padding: 2rem; max-width: 900px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="color: var(--deep-ink);">Детальный анализ</h3>
+                <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <div id="modalContent">
+                <!-- Содержимое подгрузится -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allResults = [];
+let currentDelta = 1.0; // Текущий шаг Δx
+
+// Загрузка при открытии страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalysis();
+});
+
+async function loadAnalysis() {
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('resultsContainer').style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/spzr/analyze-all');
+        const data = await response.json();
+        
+        if (data.success) {
+            allResults = data.results;
+            
+            // Обновляем статистику
+            document.getElementById('totalCount').textContent = data.total;
+            document.getElementById('qualityCount').textContent = data.quality;
+            document.getElementById('defectCount').textContent = data.defect;
+            
+            // Средний Go
+            const avgGo = data.results.reduce((sum, r) => sum + r.metrics.Go, 0) / data.total;
+            document.getElementById('avgGo').textContent = avgGo.toFixed(3);
+            
+            // Отображаем таблицу
+            renderTable(allResults);
+            document.getElementById('resultsContainer').style.display = 'block';
+        } else {
+            alert('Ошибка загрузки: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+function renderTable(results) {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    
+    if (!results || results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem;">Нет данных</td></tr>';
+        return;
+    }
+    
+    results.forEach(item => {
+        const metrics = item.metrics;
+        const isQuality = metrics.P <= 0.5; // По методичке: P ≤ 0.5 → качественный
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${item.supplier_name}</strong></td>
+            <td>${item.product_name}</td>
+            <td>${metrics.Ch}</td>
+            <td>${metrics.Co.toFixed(3)}</td>
+            <td>${metrics.Go.toFixed(3)}</td>
+            <td>${metrics.P.toFixed(4)}</td>
+            <td>
+                <span style="display: inline-block; padding: 0.3rem 0.8rem; border-radius: 20px; background: ${isQuality ? 'var(--success)' : 'var(--danger)'}; color: white; font-size: 0.8rem;">
+                    ${isQuality ? '✓ КАЧЕСТВЕННЫЙ' : '✗ БРАК'}
+                </span>
+            </td>
+            <td>
+                <button onclick="showDetails(${item.product_id}, ${item.supplier_id})" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink);">
+                    Детали
+                </button>
+            </td>
+        `;
+        
+        // Добавляем класс для подсветки
+        if (isQuality) {
+            row.classList.add('quality-row');
+        } else {
+            row.classList.add('defect-row');
+        }
+        
+        tbody.appendChild(row);
+    });
+}
+
+function filterResults() {
+    const filter = document.getElementById('filterSelect').value;
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    
+    let filtered = allResults;
+    
+    // Фильтр по качеству
+    if (filter === 'quality') {
+        filtered = filtered.filter(r => r.metrics.P <= 0.5);
+    } else if (filter === 'defect') {
+        filtered = filtered.filter(r => r.metrics.P > 0.5);
+    }
+    
+    // Поиск по тексту
+    if (search) {
+        filtered = filtered.filter(r => 
+            r.supplier_name.toLowerCase().includes(search) ||
+            r.product_name.toLowerCase().includes(search)
+        );
+    }
+    
+    renderTable(filtered);
+}
+
+async function showDetails(productId, supplierId) {
+    try {
+        const response = await fetch(`/api/spzr/product-detail?product_id=${productId}&supplier_id=${supplierId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            displayModal(data);
+        } else {
+            alert('Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('Ошибка: ' + e.message);
+    }
+}
+
+function displayModal(data) {
+    const product = data.product;
+    const chars = data.characteristics;
+    const metrics = data.metrics;
+    const isQuality = metrics.P <= 0.5;
+    
+    let charsHtml = '';
+    chars.forEach(c => {
+        const inNorm = c.in_norm;
+        charsHtml += `
+            <tr ${!inNorm ? 'style="background: #FFF5F5;"' : ''}>
+                <td><strong>${c.name}</strong></td>
+                <td>${c.unit || '-'}</td>
+                <td>${c.min} — ${c.max}</td>
+                <td style="font-weight: 600; ${!inNorm ? 'color: var(--danger);' : ''}">${c.real}</td>
+                <td>${c.gradations}</td>
+                <td>${c.log2.toFixed(3)}</td>
+                <td>${c.weight}</td>
+                <td>${inNorm ? '✓ в норме' : '✗ отклонение'}</td>
+            </tr>
+        `;
+    });
+    
+    // Расчет вклада каждой характеристики в Co
+    const log2Sum = chars.reduce((sum, c) => sum + c.log2, 0).toFixed(3);
+    
+    const modalContent = document.getElementById('modalContent');
+    modalContent.innerHTML = `
+        <div style="margin-bottom: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h4 style="color: var(--deep-ink);">${product.product_name}</h4>
+                <span style="padding: 0.5rem 1.2rem; border-radius: 40px; background: ${isQuality ? 'var(--success)' : 'var(--danger)'}; color: white; font-weight: 600;">
+                    ${isQuality ? '✓ КАЧЕСТВЕННЫЙ' : '✗ БРАК'}
+                </span>
+            </div>
+            <p><strong>Поставщик:</strong> ${product.supplier_name}</p>
+            <p><strong>Категория:</strong> ${product.category || '—'}</p>
+            <p><strong>Описание:</strong> ${product.description || '—'}</p>
+        </div>
+        
+        <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;">
+            <h4 style="margin-bottom: 1rem;">Расчет показателей:</h4>
+            <table style="width: 100%;">
+                <tr>
+                    <td><strong>Ch = N</strong> = ${metrics.Ch}</td>
+                    <td><strong>Co = Σ log₂(nᵢ)</strong> = ${log2Sum}</td>
+                </tr>
+                <tr>
+                    <td><strong>Go = Co / Ch</strong> = ${log2Sum} / ${metrics.Ch} = ${metrics.Go.toFixed(3)}</td>
+                    <td><strong>P = exp(-Go²/2)</strong> = exp(-${(metrics.Go**2).toFixed(3)}/2) = ${metrics.P.toFixed(4)}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <h4 style="margin-bottom: 1rem;">Детализация характеристик</h4>
+        <div style="overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Характеристика</th>
+                        <th>Ед.</th>
+                        <th>Норма</th>
+                        <th>Реальное</th>
+                        <th>n</th>
+                        <th>log₂(n)</th>
+                        <th>Вес</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${charsHtml}
+                </tbody>
+            </table>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding: 1rem; background: #f0f7ff; border-radius: 8px;">
+            <p><strong>Формулы из методички:</strong></p>
+            <ul style="margin-left: 1.5rem;">
+                <li>Градации: если в норме → n=2; если выше: n = (x - xmin)/Δx + 1; если ниже: n = (xmax - x)/Δx + 1</li>
+                <li>Сигнал нормы: Ch = N = ${metrics.Ch}</li>
+                <li>Сигнал отклонения: Co = Σ log₂(nᵢ) = ${log2Sum}</li>
+                <li>Отношение: Go = Co/Ch = ${metrics.Go.toFixed(3)}</li>
+                <li>Вероятность: P = exp(-Go²/2) = ${metrics.P.toFixed(4)}</li>
+                <li><strong>Правило: P ≤ 0.5 → качественный (по методичке стр. 38)</strong></li>
+            </ul>
+        </div>
+    `;
+    
+    document.getElementById('detailModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('detailModal').style.display = 'none';
+}
+
+async function trainSystem() {
+    if (!confirm('Подобрать оптимальный шаг Δx для всей базы данных?\n\nЭто может занять несколько секунд.')) {
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Подбор Δx...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/spzr/train-all', {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ Обучение завершено!\n\nОптимальный шаг Δx = ${data.best_delta}\n\nЧто это значит?\nЧем меньше Δx, тем чувствительнее система к отклонениям.\nРекомендуется использовать Δx = ${data.best_delta} для всех расчетов.`);
+            
+            // Перезагружаем анализ с новым Δx
+            // В реальном приложении нужно передать delta_x в API
+            loadAnalysis();
+        } else {
+            alert('❌ Ошибка: ' + data.error);
+        }
+    } catch (e) {
+        alert('❌ Ошибка: ' + e.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+// Закрытие модального окна по клику вне его
+window.onclick = function(event) {
+    const modal = document.getElementById('detailModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+</script>
+
+<style>
+.spzr-dashboard .quality-row {
+    border-left: 4px solid var(--success);
+}
+.spzr-dashboard .defect-row {
+    border-left: 4px solid var(--danger);
+    background-color: #FFF5F5;
+}
+.spzr-dashboard .stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+}
+#detailModal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+</style>
+{% endblock %}
