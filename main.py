@@ -151,9 +151,81 @@ async def spzr_dashboard(request: Request):
         "request": request
     })
 
+@app.get("/api/spzr/characteristic-weights")
+async def get_characteristic_weights():
+    """Получить веса характеристик для круговой диаграммы"""
+    query = """
+        SELECT name, weight, description
+        FROM characteristics
+        ORDER BY weight DESC
+    """
+    chars = db.execute_query(query) or []
+    return {
+        "success": True,
+        "characteristics": chars
+    }
+
+@app.get("/api/spzr/characteristic-stats")
+async def get_characteristic_stats(delta_x: float = 1.0):
+    """Получить статистику по характеристикам для заданного Δx"""
+    
+    # Получаем все характеристики
+    chars_query = "SELECT id, name, delta_x_default FROM characteristics"
+    chars = db.execute_query(chars_query) or []
+    
+    # Получаем все значения product_characteristics
+    values_query = """
+        SELECT 
+            characteristic_id,
+            real_value,
+            min_norm,
+            max_norm
+        FROM product_characteristics
+    """
+    values = db.execute_query(values_query) or []
+    
+    # Группируем по характеристикам
+    stats = []
+    for ch in chars:
+        ch_values = [v for v in values if v['characteristic_id'] == ch['id']]
+        if not ch_values:
+            continue
+        
+        gradations = []
+        for v in ch_values:
+            x = v['real_value']
+            xmin = v['min_norm']
+            xmax = v['max_norm']
+            dx = delta_x
+            
+            if xmin <= x <= xmax:
+                g = 2
+            elif x > xmax:
+                g = int((x - xmin) / dx) + 1
+            else:
+                g = int((xmax - x) / dx) + 1
+            
+            g = max(2, min(g, 100))
+            gradations.append(g)
+        
+        avg_g = sum(gradations) / len(gradations) if gradations else 0
+        
+        stats.append({
+            'id': ch['id'],
+            'name': ch['name'],
+            'avg_gradations': round(avg_g, 2),
+            'count': len(gradations)
+        })
+    
+    return {
+        "success": True,
+        "stats": stats,
+        "delta_x": delta_x
+    }
+
 @app.get("/api/spzr/analyze-all")
-async def analyze_all_quality():
-    """Анализ качества всех продуктов от всех поставщиков"""
+async def analyze_all_quality(delta_x: float = 1.0):
+    """Анализ качества всех продуктов от всех поставщиков с заданным Δx"""
     
     # 1. Получаем все уникальные комбинации продукт-поставщик
     query = """
@@ -174,6 +246,9 @@ async def analyze_all_quality():
     results = []
     total_quality = 0
     total_defect = 0
+    
+    # Для статистики по характеристикам
+    char_stats = {}
     
     for combo in combinations:
         # Получаем характеристики для этой комбинации
@@ -205,19 +280,26 @@ async def analyze_all_quality():
             x = ch['real_value']
             xmin = ch['min_norm']
             xmax = ch['max_norm']
-            dx = ch['delta_x_default'] or 1.0
+            dx = delta_x  # используем переданный delta_x
             
-            # Формула расчета градаций из методички
             if xmin <= x <= xmax:
-                g = 2  # В норме
+                g = 2
             elif x > xmax:
                 g = int((x - xmin) / dx) + 1
-            else:  # x < xmin
+            else:
                 g = int((xmax - x) / dx) + 1
             
-            g = max(2, min(g, 100))  # Ограничение
+            g = max(2, min(g, 100))
             log2_g = math.log2(g) if g > 0 else 0
             sum_log2 += log2_g
+            
+            # Собираем статистику
+            if ch['id'] not in char_stats:
+                char_stats[ch['id']] = {
+                    'name': ch['name'],
+                    'gradations': []
+                }
+            char_stats[ch['id']]['gradations'].append(g)
             
             char_results.append({
                 'name': ch['name'],
@@ -231,14 +313,12 @@ async def analyze_all_quality():
                 'in_norm': xmin <= x <= xmax
             })
         
-        # Показатели из методички
-        Ch = n  # сигнал нормы
-        Co = sum_log2  # сигнал отклонения
-        Go = Co / Ch if Ch > 0 else 0  # отношение
-        P = math.exp(- (Go ** 2) / 2)  # вероятность
+        Ch = n
+        Co = sum_log2
+        Go = Co / Ch if Ch > 0 else 0
+        P = math.exp(- (Go ** 2) / 2)
         P = round(P, 4)
         
-        # Вердикт по методичке: P ≤ 0.5 → качественный
         is_quality = P <= 0.5
         
         if is_quality:
@@ -252,7 +332,7 @@ async def analyze_all_quality():
             'supplier_id': combo['supplier_id'],
             'supplier_name': combo['supplier_name'],
             'characteristics_count': combo['characteristics_count'],
-            'characteristics': char_results[:3],  # Только первые 3 для краткости
+            'characteristics': char_results[:3],
             'metrics': {
                 'Ch': Ch,
                 'Co': round(Co, 3),
@@ -262,7 +342,17 @@ async def analyze_all_quality():
             }
         })
     
-    # Сортировка: сначала брак, потом качественные
+    # Подготавливаем статистику по характеристикам для диаграммы
+    characteristic_stats = []
+    for ch_id, stats in char_stats.items():
+        avg_g = sum(stats['gradations']) / len(stats['gradations']) if stats['gradations'] else 0
+        characteristic_stats.append({
+            'id': ch_id,
+            'name': stats['name'],
+            'avg_gradations': round(avg_g, 2),
+            'count': len(stats['gradations'])
+        })
+    
     results.sort(key=lambda x: (x['metrics']['is_quality'], x['metrics']['P']))
     
     return {
@@ -270,14 +360,15 @@ async def analyze_all_quality():
         "total": len(results),
         "quality": total_quality,
         "defect": total_defect,
-        "results": results
+        "results": results,
+        "characteristic_stats": characteristic_stats,
+        "delta_x": delta_x
     }
 
 @app.get("/api/spzr/product-detail")
-async def get_product_detail(product_id: int, supplier_id: int):
+async def get_product_detail(product_id: int, supplier_id: int, delta_x: float = 1.0):
     """Детальная информация о конкретном продукте"""
     
-    # Информация о продукте и поставщике
     info_query = """
         SELECT 
             p.name as product_name,
@@ -295,7 +386,6 @@ async def get_product_detail(product_id: int, supplier_id: int):
     if not info:
         return {"success": False, "error": "Продукт не найден"}
     
-    # Характеристики
     chars_query = """
         SELECT 
             c.id,
@@ -322,7 +412,7 @@ async def get_product_detail(product_id: int, supplier_id: int):
         x = ch['real_value']
         xmin = ch['min_norm']
         xmax = ch['max_norm']
-        dx = ch['delta_x_default'] or 1.0
+        dx = delta_x
         
         if xmin <= x <= xmax:
             g = 2
@@ -369,16 +459,14 @@ async def get_product_detail(product_id: int, supplier_id: int):
 
 @app.post("/api/spzr/train-all")
 async def train_system_all():
-    """Обучение СППР - подбор оптимального delta_x для всех данных"""
+    """Обучение СППР - подбор оптимального delta_x"""
     
-    # Получаем все комбинации
     query = """
         SELECT DISTINCT product_id, supplier_id
         FROM product_characteristics
     """
     combos = db.execute_query(query) or []
     
-    # Пробуем разные delta_x
     deltas = [0.1, 0.2, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
     results = {}
     
@@ -387,7 +475,6 @@ async def train_system_all():
         total = 0
         
         for combo in combos:
-            # Получаем характеристики
             chars = db.execute_query("""
                 SELECT 
                     real_value, min_norm, max_norm
@@ -433,7 +520,6 @@ async def train_system_all():
             'percent': round(quality_percent, 1)
         }
     
-    # Находим оптимальный delta (ближе всего к 50% качественных)
     best_delta = min(deltas, key=lambda d: abs(results[d]['percent'] - 50))
     
     return {
@@ -459,7 +545,6 @@ async def create_backup():
 
 @app.post("/api/service/restore")
 async def restore_backup(file: UploadFile = File(...)):
-    """Восстановление из .backup файла"""
     if not file.filename.endswith('.backup'):
         return {"success": False, "error": "Файл должен иметь расширение .backup"}
     
@@ -476,7 +561,6 @@ async def restore_backup(file: UploadFile = File(...)):
 
 @app.post("/api/service/restore-sql")
 async def restore_sql(file: UploadFile = File(...)):
-    """Восстановление из SQL файла (например init.sql)"""
     if not file.filename.endswith('.sql'):
         return {"success": False, "error": "Файл должен иметь расширение .sql"}
     

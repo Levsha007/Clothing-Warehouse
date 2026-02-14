@@ -19,34 +19,96 @@
             <li><strong>P = exp(-Go²/2)</strong> — вероятность правильной классификации</li>
         </ul>
         <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <strong>✅ Правило определения:</strong> <span style="background: var(--success); color: white; padding: 0.2rem 0.8rem; border-radius: 20px;">P ≤ 0.5 → КАЧЕСТВЕННЫЙ</span> 
+            <strong>✅ Правило определения:</strong> 
+            <span style="background: var(--success); color: white; padding: 0.2rem 0.8rem; border-radius: 20px;">P ≤ 0.5 → КАЧЕСТВЕННЫЙ</span> 
             <span style="margin-left: 1rem; background: var(--danger); color: white; padding: 0.2rem 0.8rem; border-radius: 20px;">P > 0.5 → БРАК</span>
-            <br>
-            <small style="opacity: 0.7;">(из методички: "За диапазон нормы принимается значение вероятности P от 0 до 0,5")</small>
         </p>
     </div>
     
-    <!-- Статистика -->
-    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
-            <div style="font-size: 0.9rem; opacity: 0.7;">Всего позиций</div>
-            <div id="totalCount" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--deep-ink);">0</div>
-        </div>
-        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
-            <div style="font-size: 0.9rem; opacity: 0.7;">Качественные (P ≤ 0.5)</div>
-            <div id="qualityCount" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--success);">0</div>
-        </div>
-        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
-            <div style="font-size: 0.9rem; opacity: 0.7;">Брак (P > 0.5)</div>
-            <div id="defectCount" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--danger);">0</div>
-        </div>
-        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
-            <div style="font-size: 0.9rem; opacity: 0.7;">Средний Co/Ch</div>
-            <div id="avgGo" class="stat-number" style="font-size: 2.5rem; font-weight: 700; color: var(--clay);">0</div>
+    <!-- Панель управления Δx -->
+    <div style="background: white; border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border);">
+        <div style="display: flex; flex-wrap: wrap; gap: 2rem; align-items: center; justify-content: space-between;">
+            <div style="flex: 2; min-width: 300px;">
+                <h4 style="color: var(--deep-ink); margin-bottom: 1rem;">⚙️ Настройка чувствительности (Δx)</h4>
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 3;">
+                        <input type="range" id="deltaXSlider" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%;" oninput="updateDeltaX()">
+                    </div>
+                    <div style="flex: 1; min-width: 100px;">
+                        <input type="number" id="deltaXValue" value="1.0" step="0.1" min="0.1" max="5.0" class="form-control" onchange="updateDeltaXFromInput()">
+                    </div>
+                    <button onclick="applyDeltaX()" class="btn btn-primary">Применить Δx</button>
+                </div>
+                <p style="margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.7;">
+                    <strong>Текущий Δx = <span id="currentDeltaX">1.0</span></strong> 
+                    (меньше значение = выше чувствительность к отклонениям)
+                </p>
+            </div>
+            <div style="flex: 1; text-align: center;">
+                <div style="background: var(--bone); padding: 1rem; border-radius: 12px;">
+                    <div style="font-size: 0.9rem; opacity: 0.7;">Всего позиций</div>
+                    <div id="totalCount" style="font-size: 2rem; font-weight: 700; color: var(--deep-ink);">0</div>
+                </div>
+            </div>
         </div>
     </div>
     
-    <!-- Панель управления -->
+    <!-- Статистика -->
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Качественные (P ≤ 0.5)</div>
+            <div id="qualityCount" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--success);">0</div>
+        </div>
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Брак (P > 0.5)</div>
+            <div id="defectCount" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--danger);">0</div>
+        </div>
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Средний Co/Ch</div>
+            <div id="avgGo" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--clay);">0</div>
+        </div>
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Процент брака</div>
+            <div id="defectPercent" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--clay);">0%</div>
+        </div>
+    </div>
+    
+    <!-- Диаграммы -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Круговая диаграмма (веса характеристик) -->
+        <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h4 style="color: var(--deep-ink); margin-bottom: 1rem;">🥧 Значимость характеристик (веса)</h4>
+            <div style="height: 300px; position: relative;">
+                <canvas id="weightPieChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Столбчатая диаграмма (градации для текущего Δx) -->
+        <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h4 style="color: var(--deep-ink); margin-bottom: 1rem;">📊 Градации (n) для Δx = <span id="currentDeltaXChart">1.0</span></h4>
+            <div style="height: 300px; position: relative;">
+                <canvas id="gradationsBarChart"></canvas>
+            </div>
+            <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7; text-align: center;">
+                Среднее значение по всем продуктам
+            </p>
+        </div>
+    </div>
+    
+    <!-- Сравнительная диаграмма для разных Δx -->
+    <div style="background: white; border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border);">
+        <h4 style="color: var(--deep-ink); margin-bottom: 1rem;">📊 Сравнение градаций при разных Δx</h4>
+        <div style="height: 400px; position: relative;">
+            <canvas id="comparisonBarChart"></canvas>
+        </div>
+        <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+            <button onclick="loadComparisonData()" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink);">
+                🔄 Обновить сравнение
+            </button>
+        </div>
+    </div>
+    
+    <!-- Фильтры и поиск -->
     <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; justify-content: space-between; align-items: center;">
         <div style="display: flex; gap: 1rem;">
             <button onclick="loadAnalysis()" class="btn btn-primary">
@@ -84,7 +146,7 @@
                         <tr>
                             <th>Поставщик</th>
                             <th>Продукция</th>
-                            <th>N (Ch)</th>
+                            <th>N</th>
                             <th title="Сумма log₂(n)">Co</th>
                             <th title="Отношение Co/Ch">Go</th>
                             <th title="Вероятность P = exp(-Go²/2)">P</th>
@@ -100,14 +162,8 @@
             
             <!-- Сноска -->
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--deep-ink); opacity: 0.7;">
-                <p>📌 <strong>Пояснения:</strong></p>
-                <ul style="margin-left: 1.5rem;">
-                    <li><strong>Ch (сигнал нормы)</strong> = количество характеристик (N)</li>
-                    <li><strong>Co (сигнал отклонения)</strong> = сумма двоичных логарифмов градаций: Co = Σ log₂(nᵢ)</li>
-                    <li><strong>Go (отношение)</strong> = Co / Ch — чем больше Go, тем сильнее отклонение от нормы</li>
-                    <li><strong>P (вероятность)</strong> = exp(-Go²/2) — чем меньше P, тем надежнее классификация</li>
-                    <li><strong>✅ Качественный:</strong> P ≤ 0.5 | <strong>❌ Брак:</strong> P > 0.5 (по методичке стр. 38)</li>
-                </ul>
+                <p>📌 <strong>Пояснения:</strong> Ch = N, Co = Σ log₂(nᵢ), Go = Co/Ch, P = exp(-Go²/2). 
+                <strong>✅ Качественный:</strong> P ≤ 0.5 | <strong>❌ Брак:</strong> P > 0.5</p>
             </div>
         </div>
     </div>
@@ -126,21 +182,62 @@
     </div>
 </div>
 
+<!-- Подключаем Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
 let allResults = [];
-let currentDelta = 1.0; // Текущий шаг Δx
+let currentDelta = 1.0;
+let weightChart = null;
+let gradationsChart = null;
+let comparisonChart = null;
 
 // Загрузка при открытии страницы
 document.addEventListener('DOMContentLoaded', function() {
     loadAnalysis();
+    loadWeightChart();
 });
+
+function updateDeltaX() {
+    const slider = document.getElementById('deltaXSlider');
+    const input = document.getElementById('deltaXValue');
+    const span = document.getElementById('currentDeltaX');
+    const chartSpan = document.getElementById('currentDeltaXChart');
+    
+    const val = parseFloat(slider.value).toFixed(1);
+    input.value = val;
+    span.textContent = val;
+    if (chartSpan) chartSpan.textContent = val;
+}
+
+function updateDeltaXFromInput() {
+    const slider = document.getElementById('deltaXSlider');
+    const input = document.getElementById('deltaXValue');
+    const span = document.getElementById('currentDeltaX');
+    const chartSpan = document.getElementById('currentDeltaXChart');
+    
+    let val = parseFloat(input.value);
+    if (isNaN(val) || val < 0.1) val = 0.1;
+    if (val > 5.0) val = 5.0;
+    
+    slider.value = val;
+    span.textContent = val.toFixed(1);
+    if (chartSpan) chartSpan.textContent = val.toFixed(1);
+}
+
+async function applyDeltaX() {
+    currentDelta = parseFloat(document.getElementById('deltaXValue').value);
+    await loadAnalysis();
+    await loadComparisonData();
+}
 
 async function loadAnalysis() {
     document.getElementById('loadingIndicator').style.display = 'block';
     document.getElementById('resultsContainer').style.display = 'none';
     
     try {
-        const response = await fetch('/api/spzr/analyze-all');
+        // Используем текущий delta_x
+        const response = await fetch(`/api/spzr/analyze-all?delta_x=${currentDelta}`);
         const data = await response.json();
         
         if (data.success) {
@@ -151,13 +248,18 @@ async function loadAnalysis() {
             document.getElementById('qualityCount').textContent = data.quality;
             document.getElementById('defectCount').textContent = data.defect;
             
-            // Средний Go
             const avgGo = data.results.reduce((sum, r) => sum + r.metrics.Go, 0) / data.total;
             document.getElementById('avgGo').textContent = avgGo.toFixed(3);
+            
+            const percent = data.total > 0 ? Math.round(data.defect / data.total * 100) : 0;
+            document.getElementById('defectPercent').textContent = percent + '%';
             
             // Отображаем таблицу
             renderTable(allResults);
             document.getElementById('resultsContainer').style.display = 'block';
+            
+            // Обновляем диаграмму градаций
+            updateGradationsChart(data.characteristic_stats);
         } else {
             alert('Ошибка загрузки: ' + data.error);
         }
@@ -179,7 +281,7 @@ function renderTable(results) {
     
     results.forEach(item => {
         const metrics = item.metrics;
-        const isQuality = metrics.P <= 0.5; // По методичке: P ≤ 0.5 → качественный
+        const isQuality = metrics.P <= 0.5;
         
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -201,7 +303,6 @@ function renderTable(results) {
             </td>
         `;
         
-        // Добавляем класс для подсветки
         if (isQuality) {
             row.classList.add('quality-row');
         } else {
@@ -212,20 +313,165 @@ function renderTable(results) {
     });
 }
 
+async function loadWeightChart() {
+    try {
+        const response = await fetch('/api/spzr/characteristic-weights');
+        const data = await response.json();
+        
+        if (data.success && data.characteristics) {
+            const ctx = document.getElementById('weightPieChart').getContext('2d');
+            
+            if (weightChart) weightChart.destroy();
+            
+            weightChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: data.characteristics.map(c => c.name),
+                    datasets: [{
+                        data: data.characteristics.map(c => c.weight),
+                        backgroundColor: [
+                            'rgba(26, 42, 58, 0.8)',   // deep-ink
+                            'rgba(44, 62, 80, 0.8)',   // slate
+                            'rgba(212, 178, 140, 0.8)', // sand
+                            'rgba(166, 123, 91, 0.8)',  // clay
+                            'rgba(90, 122, 107, 0.8)',  // success
+                            'rgba(184, 92, 92, 0.8)',   // danger
+                            'rgba(156, 156, 156, 0.8)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { font: { size: 10 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Error loading weight chart:', e);
+    }
+}
+
+async function updateGradationsChart(stats) {
+    if (!stats || stats.length === 0) return;
+    
+    const ctx = document.getElementById('gradationsBarChart').getContext('2d');
+    
+    if (gradationsChart) gradationsChart.destroy();
+    
+    gradationsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: stats.map(s => s.name),
+            datasets: [{
+                label: `Средние градации (n) при Δx = ${currentDelta}`,
+                data: stats.map(s => s.avg_gradations),
+                backgroundColor: 'rgba(44, 62, 80, 0.7)',
+                borderColor: 'rgba(26, 42, 58, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Градации n'
+                    }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+async function loadComparisonData() {
+    try {
+        const deltas = [0.2, 0.5, 1.0, 2.0, 5.0];
+        const promises = deltas.map(d => 
+            fetch(`/api/spzr/characteristic-stats?delta_x=${d}`).then(r => r.json())
+        );
+        
+        const results = await Promise.all(promises);
+        
+        if (!results[0].success) return;
+        
+        const ctx = document.getElementById('comparisonBarChart').getContext('2d');
+        const characteristics = results[0].stats.map(s => s.name);
+        
+        const datasets = deltas.map((d, index) => ({
+            label: `Δx = ${d}`,
+            data: results[index].stats.map(s => s.avg_gradations),
+            backgroundColor: `rgba(${44 + index * 20}, ${62 + index * 10}, ${80 - index * 10}, 0.7)`,
+            borderColor: 'rgba(26, 42, 58, 1)',
+            borderWidth: 1
+        }));
+        
+        if (comparisonChart) comparisonChart.destroy();
+        
+        comparisonChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: characteristics,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Средние градации n'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: { mode: 'index', intersect: false }
+                }
+            }
+        });
+        
+    } catch (e) {
+        console.error('Error loading comparison data:', e);
+    }
+}
+
 function filterResults() {
     const filter = document.getElementById('filterSelect').value;
     const search = document.getElementById('searchInput').value.toLowerCase();
     
     let filtered = allResults;
     
-    // Фильтр по качеству
     if (filter === 'quality') {
         filtered = filtered.filter(r => r.metrics.P <= 0.5);
     } else if (filter === 'defect') {
         filtered = filtered.filter(r => r.metrics.P > 0.5);
     }
     
-    // Поиск по тексту
     if (search) {
         filtered = filtered.filter(r => 
             r.supplier_name.toLowerCase().includes(search) ||
@@ -238,7 +484,7 @@ function filterResults() {
 
 async function showDetails(productId, supplierId) {
     try {
-        const response = await fetch(`/api/spzr/product-detail?product_id=${productId}&supplier_id=${supplierId}`);
+        const response = await fetch(`/api/spzr/product-detail?product_id=${productId}&supplier_id=${supplierId}&delta_x=${currentDelta}`);
         const data = await response.json();
         
         if (data.success) {
@@ -269,16 +515,14 @@ function displayModal(data) {
                 <td>${c.gradations}</td>
                 <td>${c.log2.toFixed(3)}</td>
                 <td>${c.weight}</td>
-                <td>${inNorm ? '✓ в норме' : '✗ отклонение'}</td>
+                <td>${inNorm ? '✓' : '✗'}</td>
             </tr>
         `;
     });
     
-    // Расчет вклада каждой характеристики в Co
     const log2Sum = chars.reduce((sum, c) => sum + c.log2, 0).toFixed(3);
     
-    const modalContent = document.getElementById('modalContent');
-    modalContent.innerHTML = `
+    document.getElementById('modalContent').innerHTML = `
         <div style="margin-bottom: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h4 style="color: var(--deep-ink);">${product.product_name}</h4>
@@ -292,7 +536,7 @@ function displayModal(data) {
         </div>
         
         <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;">
-            <h4 style="margin-bottom: 1rem;">Расчет показателей:</h4>
+            <h4 style="margin-bottom: 1rem;">Расчет показателей (Δx = ${currentDelta}):</h4>
             <table style="width: 100%;">
                 <tr>
                     <td><strong>Ch = N</strong> = ${metrics.Ch}</td>
@@ -300,7 +544,7 @@ function displayModal(data) {
                 </tr>
                 <tr>
                     <td><strong>Go = Co / Ch</strong> = ${log2Sum} / ${metrics.Ch} = ${metrics.Go.toFixed(3)}</td>
-                    <td><strong>P = exp(-Go²/2)</strong> = exp(-${(metrics.Go**2).toFixed(3)}/2) = ${metrics.P.toFixed(4)}</td>
+                    <td><strong>P = exp(-Go²/2)</strong> = ${metrics.P.toFixed(4)}</td>
                 </tr>
             </table>
         </div>
@@ -325,18 +569,6 @@ function displayModal(data) {
                 </tbody>
             </table>
         </div>
-        
-        <div style="margin-top: 1.5rem; padding: 1rem; background: #f0f7ff; border-radius: 8px;">
-            <p><strong>Формулы из методички:</strong></p>
-            <ul style="margin-left: 1.5rem;">
-                <li>Градации: если в норме → n=2; если выше: n = (x - xmin)/Δx + 1; если ниже: n = (xmax - x)/Δx + 1</li>
-                <li>Сигнал нормы: Ch = N = ${metrics.Ch}</li>
-                <li>Сигнал отклонения: Co = Σ log₂(nᵢ) = ${log2Sum}</li>
-                <li>Отношение: Go = Co/Ch = ${metrics.Go.toFixed(3)}</li>
-                <li>Вероятность: P = exp(-Go²/2) = ${metrics.P.toFixed(4)}</li>
-                <li><strong>Правило: P ≤ 0.5 → качественный (по методичке стр. 38)</strong></li>
-            </ul>
-        </div>
     `;
     
     document.getElementById('detailModal').style.display = 'flex';
@@ -347,13 +579,11 @@ function closeModal() {
 }
 
 async function trainSystem() {
-    if (!confirm('Подобрать оптимальный шаг Δx для всей базы данных?\n\nЭто может занять несколько секунд.')) {
-        return;
-    }
+    if (!confirm('Подобрать оптимальный шаг Δx для всей базы данных?')) return;
     
     const btn = event.target;
     const originalText = btn.textContent;
-    btn.textContent = '⏳ Подбор Δx...';
+    btn.textContent = '⏳ Подбор...';
     btn.disabled = true;
     
     try {
@@ -363,11 +593,11 @@ async function trainSystem() {
         const data = await response.json();
         
         if (data.success) {
-            alert(`✅ Обучение завершено!\n\nОптимальный шаг Δx = ${data.best_delta}\n\nЧто это значит?\nЧем меньше Δx, тем чувствительнее система к отклонениям.\nРекомендуется использовать Δx = ${data.best_delta} для всех расчетов.`);
-            
-            // Перезагружаем анализ с новым Δx
-            // В реальном приложении нужно передать delta_x в API
-            loadAnalysis();
+            alert(`✅ Оптимальный Δx = ${data.best_delta}`);
+            document.getElementById('deltaXSlider').value = data.best_delta;
+            document.getElementById('deltaXValue').value = data.best_delta;
+            updateDeltaX();
+            await applyDeltaX();
         } else {
             alert('❌ Ошибка: ' + data.error);
         }
@@ -379,12 +609,9 @@ async function trainSystem() {
     }
 }
 
-// Закрытие модального окна по клику вне его
 window.onclick = function(event) {
     const modal = document.getElementById('detailModal');
-    if (event.target === modal) {
-        closeModal();
-    }
+    if (event.target === modal) closeModal();
 }
 </script>
 
@@ -397,7 +624,7 @@ window.onclick = function(event) {
     background-color: #FFF5F5;
 }
 .spzr-dashboard .stat-number {
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 700;
     margin: 0.5rem 0;
 }
@@ -412,6 +639,10 @@ window.onclick = function(event) {
     z-index: 1000;
     justify-content: center;
     align-items: center;
+}
+canvas {
+    max-height: 100%;
+    max-width: 100%;
 }
 </style>
 {% endblock %}
