@@ -121,12 +121,19 @@ function loadExample(type) {
     c.name AS characteristic,
     pc.real_value,
     pc.min_norm,
-    pc.max_norm
+    pc.max_norm,
+    CASE 
+        WHEN pc.real_value BETWEEN pc.min_norm AND pc.max_norm THEN '✓ в норме'
+        WHEN pc.real_value < pc.min_norm THEN '▼ ниже нормы'
+        ELSE '▲ выше нормы'
+    END AS status
 FROM product_characteristics pc
 JOIN suppliers s ON pc.supplier_id = s.id
 JOIN products p ON pc.product_id = p.id
 JOIN characteristics c ON pc.characteristic_id = c.id
-WHERE p.id = 1 AND s.id = 1`,
+WHERE p.name LIKE '%Джинсы%' AND s.name LIKE '%Текстиль%'
+LIMIT 20`,
+        
         defect: `SELECT 
     s.name AS supplier,
     p.name AS product,
@@ -135,28 +142,33 @@ WHERE p.id = 1 AND s.id = 1`,
     pc.min_norm,
     pc.max_norm,
     CASE 
-        WHEN pc.real_value < pc.min_norm THEN 'ниже нормы'
-        WHEN pc.real_value > pc.max_norm THEN 'выше нормы'
-        ELSE 'в норме'
+        WHEN pc.real_value < pc.min_norm THEN '▼ ниже нормы'
+        WHEN pc.real_value > pc.max_norm THEN '▲ выше нормы'
+        ELSE '✓ в норме'
     END AS status
 FROM product_characteristics pc
 JOIN suppliers s ON pc.supplier_id = s.id
 JOIN products p ON pc.product_id = p.id
 JOIN characteristics c ON pc.characteristic_id = c.id
-WHERE pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm`,
+WHERE (pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm)
+LIMIT 20`,
+        
         suppliers: `SELECT 
     id, name, address, phone, contact_person
 FROM suppliers
 ORDER BY name`,
+        
         stats: `SELECT 
-    p.name,
-    COUNT(pc.id) as total_checks,
-    AVG(pc.real_value) as avg_value,
-    MIN(pc.min_norm) as min_norm,
-    MAX(pc.max_norm) as max_norm
+    p.name AS product,
+    COUNT(pc.id) AS total_checks,
+    ROUND(AVG(pc.real_value), 2) AS avg_value,
+    MIN(pc.min_norm) AS min_norm,
+    MAX(pc.max_norm) AS max_norm,
+    COUNT(CASE WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm THEN 1 END) AS defects
 FROM products p
 LEFT JOIN product_characteristics pc ON p.id = pc.product_id
-GROUP BY p.id, p.name`
+GROUP BY p.id, p.name
+ORDER BY defects DESC`
     };
     
     if (examples[type]) {

@@ -9,11 +9,11 @@
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem;">
         <!-- Бэкап -->
         <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
-            <h3 style="color: var(--dark); margin-bottom: 1rem;">💾 Полный бэкап</h3>
-            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
-            Создание резервной копии всей базы данных в формате .backup
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">💾 Полный бэкап</h3>
+            <p class="service-description" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem;">
+                Создание резервной копии всей базы данных в формате .backup
             </p>
-            <div style="background: var(--light); padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
+            <div class="folder-info" style="background: var(--bone); padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
                 <small>📁 Папка: backups/YYYYMMDD_HHMMSS/</small>
             </div>
             <button onclick="createBackup()" class="btn btn-primary" style="width: 100%;">
@@ -22,43 +22,62 @@
             <div id="backupResult" style="margin-top: 1rem;"></div>
         </div>
         
-        <!-- Восстановление -->
+        <!-- Восстановление из .backup -->
         <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
-            <h3 style="color: var(--dark); margin-bottom: 1rem;">🔄 Восстановление</h3>
-            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
-            Восстановить БД из .backup файла
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">🔄 Восстановление из .backup</h3>
+            <p class="service-description" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem;">
+                Восстановить БД из .backup файла (pg_restore)
             </p>
-            <div style="background: #fff2f0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem; border-left: 4px solid var(--danger);">
+            <div class="warning-box" style="background: #fff2f0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem; border-left: 4px solid var(--danger);">
                 <small style="color: var(--danger);">⚠️ Все текущие данные будут заменены!</small>
             </div>
             <div style="margin-bottom: 1rem;">
                 <input type="file" id="backupFile" accept=".backup" class="form-control">
             </div>
-            <button onclick="restoreBackup()" class="btn" style="width: 100%; background: var(--accent); color: var(--dark);">
-                📂 Восстановить
+            <button onclick="restoreBackup()" class="btn" style="width: 100%; background: var(--sand); color: var(--deep-ink);">
+                📂 Восстановить из .backup
             </button>
             <div id="restoreResult" style="margin-top: 1rem;"></div>
         </div>
         
+        <!-- Восстановление из SQL -->
+        <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">📜 Восстановление из SQL</h3>
+            <p class="service-description" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem;">
+                Выполнить SQL файл (например init.sql) через psql
+            </p>
+            <div class="warning-box" style="background: #fff2f0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem; border-left: 4px solid var(--danger);">
+                <small style="color: var(--danger);">⚠️ Все текущие данные будут заменены!</small>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <input type="file" id="sqlFile" accept=".sql" class="form-control">
+                <small style="display: block; margin-top: 0.3rem; color: var(--deep-ink); opacity: 0.6;">Поддерживаются файлы .sql (например init.sql)</small>
+            </div>
+            <button onclick="restoreSql()" class="btn" style="width: 100%; background: var(--sand); color: var(--deep-ink);">
+                📂 Выполнить SQL файл
+            </button>
+            <div id="sqlRestoreResult" style="margin-top: 1rem;"></div>
+        </div>
+        
         <!-- Архивация таблиц -->
         <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
-            <h3 style="color: var(--dark); margin-bottom: 1rem;">📦 Архивация таблиц</h3>
-            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
-            Бэкап + Excel + JSON + удаление из БД
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">📦 Архивация таблиц</h3>
+            <p class="service-description" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem;">
+                Бэкап + Excel + JSON + удаление из БД
             </p>
-            <div style="background: #fff2e0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
+            <div class="warning-box" style="background: #fff2e0; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
                 <small style="color: #b85c5c;">⚠️ Таблицы будут удалены после архивации!</small>
             </div>
             <div style="margin-bottom: 1rem;">
-                <select id="archiveTables" multiple style="width: 100%; height: 120px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                <select id="archiveTables" multiple class="archive-select" style="width: 100%; height: 120px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
                     {% for table in tables %}
                     <option value="{{ table }}">{{ table }}</option>
                     {% endfor %}
                 </select>
-                <small style="color: var(--dark); opacity: 0.6;">Удерживайте Ctrl/Cmd для выбора нескольких</small>
+                <small style="color: var(--deep-ink); opacity: 0.6;">Удерживайте Ctrl/Cmd для выбора нескольких</small>
             </div>
             <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                <button onclick="archiveSelected()" class="btn btn-sm" style="background: var(--dark); color: white; flex: 1;">
+                <button onclick="archiveSelected()" class="btn btn-sm" style="background: var(--deep-ink); color: white; flex: 1;">
                     📌 Выбранные
                 </button>
                 <button onclick="archiveAll()" class="btn btn-sm" style="background: var(--danger); color: white; flex: 1;">
@@ -70,12 +89,12 @@
         
         <!-- Экспорт -->
         <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
-            <h3 style="color: var(--dark); margin-bottom: 1rem;">📤 Экспорт таблиц</h3>
-            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
-            Экспорт без удаления из БД
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">📤 Экспорт таблиц</h3>
+            <p class="service-description" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem;">
+                Экспорт без удаления из БД
             </p>
             <div style="margin-bottom: 1rem;">
-                <select id="exportTables" multiple style="width: 100%; height: 100px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
+                <select id="exportTables" multiple class="export-select" style="width: 100%; height: 100px; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border);">
                     {% for table in tables %}
                     <option value="{{ table }}">{{ table }}</option>
                     {% endfor %}
@@ -90,7 +109,7 @@
                     ⬇️ Экспорт
                 </button>
             </div>
-            <button onclick="exportAllTables()" class="btn btn-sm" style="width: 100%; background: var(--light);">
+            <button onclick="exportAllTables()" class="btn btn-sm" style="width: 100%; background: var(--bone);">
                 🌐 Экспорт всех таблиц
             </button>
         </div>
@@ -98,10 +117,10 @@
         <!-- Удаление таблицы -->
         <div class="service-card" style="background: white; border-radius: 16px; padding: 1.5rem;">
             <h3 style="color: var(--danger); margin-bottom: 1rem;">🗑️ Удаление таблицы</h3>
-            <p style="color: var(--dark); opacity: 0.7; margin-bottom: 1rem;">
-            Полное удаление таблицы из БД (безвозвратно)
+            <p class="service-description" style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 1rem;">
+                Полное удаление таблицы из БД (безвозвратно)
             </p>
-            <div style="background: #fee2e2; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
+            <div class="danger-box" style="background: #fee2e2; padding: 0.8rem; border-radius: 8px; margin-bottom: 1.2rem;">
                 <small style="color: var(--danger);">⚠️ Это действие нельзя отменить!</small>
             </div>
             <div style="margin-bottom: 1rem;">
@@ -152,6 +171,36 @@ async function restoreBackup() {
     formData.append('file', fileInput.files[0]);
     
     const res = await fetch('/api/service/restore', {
+        method: 'POST',
+        body: formData
+    });
+    
+    const result = await res.json();
+    
+    if (result.success) {
+        div.innerHTML = `<div class="success" style="padding: 0.8rem;">✅ ${result.message}</div>`;
+        setTimeout(() => location.reload(), 3000);
+    } else {
+        div.innerHTML = `<div class="error" style="padding: 0.8rem;">❌ ${result.error}</div>`;
+    }
+}
+
+async function restoreSql() {
+    const fileInput = document.getElementById('sqlFile');
+    if (!fileInput.files[0]) {
+        alert('Выберите SQL файл');
+        return;
+    }
+    
+    if (!confirm('⚠️ ВНИМАНИЕ! Выполнение SQL файла может изменить структуру БД. Продолжить?')) return;
+    
+    const div = document.getElementById('sqlRestoreResult');
+    div.innerHTML = '<div class="loading" style="padding: 0.8rem;">⏳ Выполнение SQL...</div>';
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    const res = await fetch('/api/service/restore-sql', {
         method: 'POST',
         body: formData
     });

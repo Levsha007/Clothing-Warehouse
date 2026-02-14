@@ -144,10 +144,9 @@ async def execute_query(sql: str = Form(...), params: str = Form("{}")):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ==================== АВТОМАТИЧЕСКАЯ СППР (для всех данных) ====================
+# ==================== АВТОМАТИЧЕСКАЯ СППР ====================
 @app.get("/spzr", response_class=HTMLResponse)
 async def spzr_dashboard(request: Request):
-    """Автоматический анализ качества всей продукции"""
     return templates.TemplateResponse("spzr_dashboard.html", {
         "request": request
     })
@@ -208,7 +207,7 @@ async def analyze_all_quality():
             xmax = ch['max_norm']
             dx = ch['delta_x_default'] or 1.0
             
-            # Формула расчета градаций
+            # Формула расчета градаций из методички
             if xmin <= x <= xmax:
                 g = 2  # В норме
             elif x > xmax:
@@ -227,19 +226,19 @@ async def analyze_all_quality():
                 'min': xmin,
                 'max': xmax,
                 'gradations': g,
-                'log2': round(log2_g, 3),
+                'log2': log2_g,
                 'weight': ch['weight'] or 1,
                 'in_norm': xmin <= x <= xmax
             })
         
-        # Показатели
+        # Показатели из методички
         Ch = n  # сигнал нормы
         Co = sum_log2  # сигнал отклонения
         Go = Co / Ch if Ch > 0 else 0  # отношение
         P = math.exp(- (Go ** 2) / 2)  # вероятность
         P = round(P, 4)
         
-        # Вердикт
+        # Вердикт по методичке: P ≤ 0.5 → качественный
         is_quality = P <= 0.5
         
         if is_quality:
@@ -255,8 +254,8 @@ async def analyze_all_quality():
             'characteristics_count': combo['characteristics_count'],
             'characteristics': char_results[:3],  # Только первые 3 для краткости
             'metrics': {
-                'Ch': round(Ch, 2),
-                'Co': round(Co, 2),
+                'Ch': Ch,
+                'Co': round(Co, 3),
                 'Go': round(Go, 3),
                 'P': P,
                 'is_quality': is_quality
@@ -343,7 +342,7 @@ async def get_product_detail(product_id: int, supplier_id: int):
             'min': xmin,
             'max': xmax,
             'gradations': g,
-            'log2': round(log2_g, 3),
+            'log2': log2_g,
             'weight': ch['weight'] or 1,
             'in_norm': xmin <= x <= xmax
         })
@@ -359,8 +358,8 @@ async def get_product_detail(product_id: int, supplier_id: int):
         "product": info[0],
         "characteristics": char_results,
         "metrics": {
-            "Ch": round(Ch, 2),
-            "Co": round(Co, 2),
+            "Ch": Ch,
+            "Co": round(Co, 3),
             "Go": round(Go, 3),
             "P": P,
             "is_quality": is_quality,
@@ -381,20 +380,18 @@ async def train_system_all():
     
     # Пробуем разные delta_x
     deltas = [0.1, 0.2, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
-    best_delta = 1.0
-    best_accuracy = 0
+    results = {}
     
     for delta in deltas:
-        correct = 0
+        quality_count = 0
         total = 0
         
         for combo in combos:
             # Получаем характеристики
             chars = db.execute_query("""
                 SELECT 
-                    real_value, min_norm, max_norm, delta_x_default
-                FROM product_characteristics pc
-                JOIN characteristics c ON pc.characteristic_id = c.id
+                    real_value, min_norm, max_norm
+                FROM product_characteristics
                 WHERE product_id = %s AND supplier_id = %s
             """, (combo['product_id'], combo['supplier_id'])) or []
             
@@ -408,7 +405,7 @@ async def train_system_all():
                 x = ch['real_value']
                 xmin = ch['min_norm']
                 xmax = ch['max_norm']
-                dx = delta  # используем текущий delta
+                dx = delta
                 
                 if xmin <= x <= xmax:
                     g = 2
@@ -425,21 +422,24 @@ async def train_system_all():
             Go = Co / Ch if Ch > 0 else 0
             P = math.exp(- (Go ** 2) / 2)
             
-            # Считаем правильным, если P <= 0.5 (эталон)
-            # В реальности здесь нужно сравнение с экспертной оценкой
-            # Пока используем как есть
-            correct += 1
+            if P <= 0.5:
+                quality_count += 1
             total += 1
         
-        accuracy = correct / total if total > 0 else 0
-        if accuracy > best_accuracy:
-            best_accuracy = accuracy
-            best_delta = delta
+        quality_percent = (quality_count / total * 100) if total > 0 else 0
+        results[delta] = {
+            'quality': quality_count,
+            'total': total,
+            'percent': round(quality_percent, 1)
+        }
+    
+    # Находим оптимальный delta (ближе всего к 50% качественных)
+    best_delta = min(deltas, key=lambda d: abs(results[d]['percent'] - 50))
     
     return {
         "success": True,
         "best_delta": best_delta,
-        "accuracy": round(best_accuracy, 3)
+        "results": results
     }
 
 # ==================== СЕРВИСНЫЕ ФУНКЦИИ ====================
@@ -454,19 +454,37 @@ async def service_page(request: Request):
 async def create_backup():
     success, path, error = db.create_backup()
     if success:
-        return {"success": True, "message": f"Бэкап: {path}"}
+        return {"success": True, "message": f"Бэкап создан: {path}"}
     return {"success": False, "error": error}
 
 @app.post("/api/service/restore")
 async def restore_backup(file: UploadFile = File(...)):
+    """Восстановление из .backup файла"""
     if not file.filename.endswith('.backup'):
-        return {"success": False, "error": "Только .backup"}
+        return {"success": False, "error": "Файл должен иметь расширение .backup"}
     
     temp = tempfile.NamedTemporaryFile(delete=False, suffix=".backup")
     temp.write(await file.read())
     temp.close()
     
     success, message = db.restore_backup(temp.name)
+    os.unlink(temp.name)
+    
+    if success:
+        return {"success": True, "message": message}
+    return {"success": False, "error": message}
+
+@app.post("/api/service/restore-sql")
+async def restore_sql(file: UploadFile = File(...)):
+    """Восстановление из SQL файла (например init.sql)"""
+    if not file.filename.endswith('.sql'):
+        return {"success": False, "error": "Файл должен иметь расширение .sql"}
+    
+    temp = tempfile.NamedTemporaryFile(delete=False, suffix=".sql", mode='wb')
+    temp.write(await file.read())
+    temp.close()
+    
+    success, message = db.restore_from_sql(temp.name)
     os.unlink(temp.name)
     
     if success:

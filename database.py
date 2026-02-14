@@ -23,6 +23,7 @@ class Database:
         }
         self.pg_dump = "pg_dump"
         self.pg_restore = "pg_restore"
+        self.psql = "psql"  # Добавляем psql для SQL файлов
         self._init_dirs()
     
     def _init_dirs(self):
@@ -69,6 +70,42 @@ class Database:
             return None
         finally:
             conn.close()
+    
+    def execute_sql_file(self, filepath):
+        """Выполнить SQL файл через psql"""
+        try:
+            db = os.getenv('DB_NAME', 'clothing_warehouse')
+            user = os.getenv('DB_USER', 'postgres')
+            host = os.getenv('DB_HOST', 'postgres')
+            port = os.getenv('DB_PORT', '5432')
+            
+            cmd = [
+                self.psql,
+                '-h', host,
+                '-U', user,
+                '-p', port,
+                '-d', db,
+                '-f', filepath,
+                '-v', 'ON_ERROR_STOP=1'
+            ]
+            
+            env = os.environ.copy()
+            env['PGPASSWORD'] = os.getenv('DB_PASSWORD', 'postgres')
+            
+            result = subprocess.run(
+                cmd,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                return True, "SQL файл успешно выполнен"
+            else:
+                return False, result.stderr
+                
+        except Exception as e:
+            return False, str(e)
     
     def get_tables(self):
         q = "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name"
@@ -282,6 +319,7 @@ class Database:
             return False, None, str(e)
     
     def restore_backup(self, backup_file):
+        """Восстановление из .backup файла"""
         try:
             db = os.getenv('DB_NAME', 'clothing_warehouse')
             user = os.getenv('DB_USER', 'postgres')
@@ -297,11 +335,18 @@ class Database:
             
             res = subprocess.run(cmd, env=env, capture_output=True, text=True)
             if res.returncode == 0:
-                return True, "Восстановление выполнено"
+                return True, "Восстановление из .backup выполнено"
             # Игнорируем ошибку transaction_timeout
             if "transaction_timeout" in res.stderr:
                 return True, "Восстановление с предупреждениями"
             return False, res.stderr
+        except Exception as e:
+            return False, str(e)
+    
+    def restore_from_sql(self, sql_file):
+        """Восстановление из SQL файла (например init.sql)"""
+        try:
+            return self.execute_sql_file(sql_file)
         except Exception as e:
             return False, str(e)
     
