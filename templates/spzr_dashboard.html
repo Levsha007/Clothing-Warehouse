@@ -51,6 +51,16 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Кнопки экспорта -->
+        <div style="display: flex; gap: 1rem; margin-top: 1rem; justify-content: flex-end;">
+            <button onclick="exportSPZR('json')" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink);">
+                📥 Скачать JSON
+            </button>
+            <button onclick="exportSPZR('excel')" class="btn btn-sm btn-success">
+                📥 Скачать Excel
+            </button>
+        </div>
     </div>
     
     <!-- Статистика -->
@@ -176,7 +186,7 @@
                 <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
             </div>
             <div id="modalContent">
-                <!-- Содержимое подгрузится -->
+                <!-- Содержимое подгрузится динамически -->
             </div>
         </div>
     </div>
@@ -220,6 +230,7 @@ function updateDeltaXFromInput() {
     if (isNaN(val) || val < 0.1) val = 0.1;
     if (val > 5.0) val = 5.0;
     
+    input.value = val.toFixed(1);
     slider.value = val;
     span.textContent = val.toFixed(1);
     if (chartSpan) chartSpan.textContent = val.toFixed(1);
@@ -236,7 +247,6 @@ async function loadAnalysis() {
     document.getElementById('resultsContainer').style.display = 'none';
     
     try {
-        // Используем текущий delta_x
         const response = await fetch(`/api/spzr/analyze-all?delta_x=${currentDelta}`);
         const data = await response.json();
         
@@ -259,7 +269,9 @@ async function loadAnalysis() {
             document.getElementById('resultsContainer').style.display = 'block';
             
             // Обновляем диаграмму градаций
-            updateGradationsChart(data.characteristic_stats);
+            if (data.characteristic_stats) {
+                updateGradationsChart(data.characteristic_stats);
+            }
         } else {
             alert('Ошибка загрузки: ' + data.error);
         }
@@ -330,12 +342,12 @@ async function loadWeightChart() {
                     datasets: [{
                         data: data.characteristics.map(c => c.weight),
                         backgroundColor: [
-                            'rgba(26, 42, 58, 0.8)',   // deep-ink
-                            'rgba(44, 62, 80, 0.8)',   // slate
-                            'rgba(212, 178, 140, 0.8)', // sand
-                            'rgba(166, 123, 91, 0.8)',  // clay
-                            'rgba(90, 122, 107, 0.8)',  // success
-                            'rgba(184, 92, 92, 0.8)',   // danger
+                            'rgba(26, 42, 58, 0.8)',
+                            'rgba(44, 62, 80, 0.8)',
+                            'rgba(212, 178, 140, 0.8)',
+                            'rgba(166, 123, 91, 0.8)',
+                            'rgba(90, 122, 107, 0.8)',
+                            'rgba(184, 92, 92, 0.8)',
                             'rgba(156, 156, 156, 0.8)'
                         ],
                         borderWidth: 1
@@ -369,7 +381,7 @@ async function loadWeightChart() {
     }
 }
 
-async function updateGradationsChart(stats) {
+function updateGradationsChart(stats) {
     if (!stats || stats.length === 0) return;
     
     const ctx = document.getElementById('gradationsBarChart').getContext('2d');
@@ -416,7 +428,7 @@ async function loadComparisonData() {
         
         const results = await Promise.all(promises);
         
-        if (!results[0].success) return;
+        if (!results[0] || !results[0].success) return;
         
         const ctx = document.getElementById('comparisonBarChart').getContext('2d');
         const characteristics = results[0].stats.map(s => s.name);
@@ -503,6 +515,10 @@ function displayModal(data) {
     const metrics = data.metrics;
     const isQuality = metrics.P <= 0.5;
     
+    // Подсчитываем количество отклонений
+    const deviations = chars.filter(c => !c.in_norm).length;
+    const totalChars = chars.length;
+    
     let charsHtml = '';
     chars.forEach(c => {
         const inNorm = c.in_norm;
@@ -515,14 +531,49 @@ function displayModal(data) {
                 <td>${c.gradations}</td>
                 <td>${c.log2.toFixed(3)}</td>
                 <td>${c.weight}</td>
-                <td>${inNorm ? '✓' : '✗'}</td>
+                <td style="text-align: center;">
+                    ${inNorm 
+                        ? '<span style="color: var(--success); font-weight: bold;">✓ в норме</span>' 
+                        : '<span style="color: var(--danger); font-weight: bold;">✗ отклонение</span>'}
+                </td>
             </tr>
         `;
     });
     
     const log2Sum = chars.reduce((sum, c) => sum + c.log2, 0).toFixed(3);
     
-    document.getElementById('modalContent').innerHTML = `
+    // Пояснение для пользователя
+    let explanation = '';
+    if (isQuality) {
+        explanation = `
+            <div style="background: #e8f3ed; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <p><strong>✅ Почему товар КАЧЕСТВЕННЫЙ, хотя есть отклонения?</strong></p>
+                <p>Несмотря на ${deviations} отклонений из ${totalChars}, система считает товар качественным, потому что:</p>
+                <ul>
+                    <li>Отклонения незначительны (малые градации n)</li>
+                    <li>Вероятность P = ${metrics.P} ≤ 0.5 (по методичке стр. 38)</li>
+                    <li>Сигнал отклонения Co = ${metrics.Co} не превышает порог</li>
+                </ul>
+                <p><em>Пороговое правило: P ≤ 0.5 → качественный</em></p>
+            </div>
+        `;
+    } else {
+        explanation = `
+            <div style="background: #fff2f0; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                <p><strong>❌ Почему товар БРАК, если большинство характеристик в норме?</strong></p>
+                <p>Хотя только ${deviations} из ${totalChars} характеристик имеют отклонения, система считает товар браком, потому что:</p>
+                <ul>
+                    <li>Отклонения СИЛЬНЫЕ (большие градации n)</li>
+                    <li>Вероятность P = ${metrics.P} > 0.5 (по методичке стр. 38)</li>
+                    <li>Сигнал отклонения Co = ${metrics.Co} превышает порог</li>
+                </ul>
+                <p><em>Пороговое правило: P > 0.5 → брак</em></p>
+            </div>
+        `;
+    }
+    
+    const modalContent = document.getElementById('modalContent');
+    modalContent.innerHTML = `
         <div style="margin-bottom: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h4 style="color: var(--deep-ink);">${product.product_name}</h4>
@@ -535,16 +586,18 @@ function displayModal(data) {
             <p><strong>Описание:</strong> ${product.description || '—'}</p>
         </div>
         
+        ${explanation}
+        
         <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;">
             <h4 style="margin-bottom: 1rem;">Расчет показателей (Δx = ${currentDelta}):</h4>
-            <table style="width: 100%;">
+            <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td><strong>Ch = N</strong> = ${metrics.Ch}</td>
-                    <td><strong>Co = Σ log₂(nᵢ)</strong> = ${log2Sum}</td>
+                    <td style="padding: 0.5rem;"><strong>Ch = N</strong> = ${metrics.Ch}</td>
+                    <td style="padding: 0.5rem;"><strong>Co = Σ log₂(nᵢ)</strong> = ${log2Sum}</td>
                 </tr>
                 <tr>
-                    <td><strong>Go = Co / Ch</strong> = ${log2Sum} / ${metrics.Ch} = ${metrics.Go.toFixed(3)}</td>
-                    <td><strong>P = exp(-Go²/2)</strong> = ${metrics.P.toFixed(4)}</td>
+                    <td style="padding: 0.5rem;"><strong>Go = Co / Ch</strong> = ${log2Sum} / ${metrics.Ch} = ${metrics.Go.toFixed(3)}</td>
+                    <td style="padding: 0.5rem;"><strong>P = exp(-Go²/2)</strong> = exp(-${(metrics.Go**2).toFixed(3)}/2) = ${metrics.P.toFixed(4)}</td>
                 </tr>
             </table>
         </div>
@@ -568,6 +621,17 @@ function displayModal(data) {
                     ${charsHtml}
                 </tbody>
             </table>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding: 1rem; background: #f0f7ff; border-radius: 8px;">
+            <p><strong>📊 Анализ градаций:</strong></p>
+            <ul style="margin-left: 1.5rem;">
+                <li>Сумма log₂(n) = ${log2Sum}</li>
+                <li>Количество характеристик N = ${metrics.Ch}</li>
+                <li>Отношение Go = ${metrics.Go.toFixed(3)}</li>
+                <li><strong>Вероятность P = ${metrics.P.toFixed(4)}</strong></li>
+                <li><strong>Правило:</strong> P ${isQuality ? '≤ 0.5 → КАЧЕСТВЕННЫЙ' : '> 0.5 → БРАК'}</li>
+            </ul>
         </div>
     `;
     
@@ -607,6 +671,11 @@ async function trainSystem() {
         btn.textContent = originalText;
         btn.disabled = false;
     }
+}
+
+async function exportSPZR(format) {
+    const delta = currentDelta;
+    window.open(`/api/spzr/export?delta_x=${delta}&format=${format}`, '_blank');
 }
 
 window.onclick = function(event) {

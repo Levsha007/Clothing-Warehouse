@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, File, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -527,6 +527,123 @@ async def train_system_all():
         "best_delta": best_delta,
         "results": results
     }
+
+@app.get("/api/spzr/export")
+async def export_spzr_analysis(delta_x: float = 1.0, format: str = "json"):
+    """Экспорт результатов СППР анализа в JSON или Excel"""
+    
+    # Получаем анализ
+    analysis = await analyze_all_quality(delta_x)
+    
+    if not analysis.get("success"):
+        return {"success": False, "error": "Ошибка анализа"}
+    
+    if format == "json":
+        # Создаем JSON файл
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"spzr_analysis_delta{delta_x}_{timestamp}.json"
+        
+        # Подготавливаем данные для экспорта
+        export_data = {
+            "timestamp": datetime.now().isoformat(),
+            "delta_x": delta_x,
+            "summary": {
+                "total": analysis["total"],
+                "quality": analysis["quality"],
+                "defect": analysis["defect"],
+                "quality_percent": round(analysis["quality"] / analysis["total"] * 100, 2) if analysis["total"] > 0 else 0,
+                "defect_percent": round(analysis["defect"] / analysis["total"] * 100, 2) if analysis["total"] > 0 else 0
+            },
+            "characteristic_stats": analysis.get("characteristic_stats", []),
+            "results": analysis["results"]
+        }
+        
+        # Сохраняем в файл
+        export_dir = Path("exports") / datetime.now().strftime("%Y%m%d")
+        export_dir.mkdir(parents=True, exist_ok=True)
+        filepath = export_dir / filename
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, ensure_ascii=False, indent=2, default=str)
+        
+        return FileResponse(
+            path=filepath,
+            filename=filename,
+            media_type="application/json"
+        )
+    
+    elif format == "excel":
+        # Создаем Excel файл
+        import pandas as pd
+        from io import BytesIO
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"spzr_analysis_delta{delta_x}_{timestamp}.xlsx"
+        
+        # Подготавливаем данные для Excel
+        results_data = []
+        for r in analysis["results"]:
+            results_data.append({
+                "Поставщик": r["supplier_name"],
+                "Продукция": r["product_name"],
+                "Характеристик": r["characteristics_count"],
+                "Ch": r["metrics"]["Ch"],
+                "Co": r["metrics"]["Co"],
+                "Go": r["metrics"]["Go"],
+                "P": r["metrics"]["P"],
+                "Вердикт": "КАЧЕСТВЕННЫЙ" if r["metrics"]["is_quality"] else "БРАК"
+            })
+        
+        # Статистика по характеристикам
+        chars_data = []
+        for c in analysis.get("characteristic_stats", []):
+            chars_data.append({
+                "Характеристика": c["name"],
+                "Средние градации": c["avg_gradations"],
+                "Количество измерений": c["count"]
+            })
+        
+        # Создаем Excel файл в памяти
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            if results_data:
+                pd.DataFrame(results_data).to_excel(writer, sheet_name="Результаты", index=False)
+            if chars_data:
+                pd.DataFrame(chars_data).to_excel(writer, sheet_name="Характеристики", index=False)
+            
+            # Сводка
+            summary_data = {
+                "Параметр": [
+                    "Дата анализа",
+                    "Δx",
+                    "Всего позиций",
+                    "Качественные",
+                    "Брак",
+                    "% качественных",
+                    "% брака"
+                ],
+                "Значение": [
+                    datetime.now().strftime("%d.%m.%Y %H:%M"),
+                    delta_x,
+                    analysis["total"],
+                    analysis["quality"],
+                    analysis["defect"],
+                    round(analysis["quality"] / analysis["total"] * 100, 2) if analysis["total"] > 0 else 0,
+                    round(analysis["defect"] / analysis["total"] * 100, 2) if analysis["total"] > 0 else 0
+                ]
+            }
+            pd.DataFrame(summary_data).to_excel(writer, sheet_name="Сводка", index=False)
+        
+        output.seek(0)
+        
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    
+    else:
+        return {"success": False, "error": "Неверный формат"}
 
 # ==================== СЕРВИСНЫЕ ФУНКЦИИ ====================
 @app.get("/service", response_class=HTMLResponse)
