@@ -158,7 +158,8 @@ INSERT INTO characteristics (name, unit, delta_x_default, weight, description) V
 ('Прочность швов', 'Н/см', 5.0, 20, 'Ньютон на сантиметр - нагрузка до разрыва'),
 ('Соответствие размеру', 'мм', 2.0, 25, 'Отклонение от заявленного размера (+/-)'),
 ('Качество упаковки', 'баллы', 0.5, 15, 'Внешний вид и целостность упаковки (1-5)'),
-('Износостойкость', 'циклы', 1000.0, 20, 'Количество циклов стирки до потери вида');
+-- Износостойкость теперь в баллах (1-10), чтобы масштаб был как у других характеристик
+('Износостойкость', 'баллы', 0.5, 20, 'Оценка износостойкости материала по 10-балльной шкале');
 
 -- ============ 4. СВЯЗИ ПРОДУКТ-ПОСТАВЩИК-ХАРАКТЕРИСТИКИ ============
 CREATE TABLE product_characteristics (
@@ -258,20 +259,20 @@ BEGIN
                             random_val := 4 + random(); -- 4-5 (норма)
                         END IF;
                     
-                    -- Износостойкость (норма 3000-10000)
+                    -- Износостойкость теперь по 10-балльной шкале (норма 7-10)
                     WHEN 'Износостойкость' THEN
                         IF is_defect THEN
-                            random_val := 1000 + random() * 2000; -- 1000-3000 (брак)
+                            random_val := 3 + random() * 4; -- 3-7 (брак - низкая износостойкость)
                         ELSE
-                            random_val := 4000 + random() * 5000; -- 4000-9000 (норма)
+                            random_val := 7 + random() * 3; -- 7-10 (норма - высокая износостойкость)
                         END IF;
                     
                     ELSE
-                        random_val := 50;
+                        random_val := 5;
                 END CASE;
                 
-                -- Округляем до 2 знаков
-                random_val := ROUND(CAST(random_val AS NUMERIC), 2);
+                -- Округляем до 2 знаков (исправлено для FLOAT)
+                random_val := ROUND(random_val::numeric, 2)::float;
                 
                 -- Вставляем запись
                 BEGIN
@@ -287,7 +288,7 @@ BEGIN
                             WHEN 'Прочность швов' THEN 20
                             WHEN 'Соответствие размеру' THEN -10
                             WHEN 'Качество упаковки' THEN 4
-                            WHEN 'Износостойкость' THEN 3000
+                            WHEN 'Износостойкость' THEN 7
                             ELSE 0
                         END,
                         CASE char.name
@@ -298,8 +299,8 @@ BEGIN
                             WHEN 'Прочность швов' THEN 50
                             WHEN 'Соответствие размеру' THEN 10
                             WHEN 'Качество упаковки' THEN 5
-                            WHEN 'Износостойкость' THEN 10000
-                            ELSE 100
+                            WHEN 'Износостойкость' THEN 10
+                            ELSE 10
                         END,
                         random_val
                     )
@@ -325,3 +326,17 @@ SELECT
     SUM(CASE WHEN real_value < min_norm OR real_value > max_norm THEN 1 ELSE 0 END) as отклонений,
     ROUND(100.0 * SUM(CASE WHEN real_value < min_norm OR real_value > max_norm THEN 1 ELSE 0 END) / COUNT(*), 2) as процент_брака
 FROM product_characteristics;
+
+-- Дополнительная статистика по каждой характеристике (исправлено с приведением типов)
+SELECT 
+    c.name as характеристика,
+    COUNT(*) as всего_измерений,
+    ROUND(AVG(pc.real_value)::numeric, 2) as среднее_значение,
+    MIN(pc.real_value) as минимум,
+    MAX(pc.real_value) as максимум,
+    SUM(CASE WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm THEN 1 ELSE 0 END) as отклонений,
+    ROUND(100.0 * SUM(CASE WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm THEN 1 ELSE 0 END) / COUNT(*), 2) as процент_брака
+FROM product_characteristics pc
+JOIN characteristics c ON pc.characteristic_id = c.id
+GROUP BY c.name, c.id
+ORDER BY c.id;

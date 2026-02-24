@@ -16,7 +16,7 @@
             <li><strong>Ch = N</strong> — сигнал нормы (количество характеристик)</li>
             <li><strong>Co = Σ log₂(nᵢ)</strong> — сигнал отклонения</li>
             <li><strong>Go = Co / Ch</strong> — отношение отклонение/норма</li>
-            <li><strong>P = exp(-Go²/2)</strong> — вероятность правильной классификации</li>
+            <li><strong>P = e^(-ln2 / Go²)</strong> — вероятность правильной классификации</li>
         </ul>
         <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
             <strong>✅ Правило определения:</strong> 
@@ -85,22 +85,25 @@
     
     <!-- Диаграммы -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-        <!-- Круговая диаграмма (веса характеристик) -->
+        <!-- Круговая диаграмма (веса характеристик) - НЕ ЗАВИСИТ ОТ Δx -->
         <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
             <h4 style="color: var(--deep-ink); margin-bottom: 1rem;">🥧 Значимость характеристик (веса)</h4>
             <div style="height: 300px; position: relative;">
                 <canvas id="weightPieChart"></canvas>
             </div>
+            <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7; text-align: center;">
+                Веса характеристик (константы из БД, не зависят от Δx)
+            </p>
         </div>
         
-        <!-- Столбчатая диаграмма (градации для текущего Δx) -->
+        <!-- Столбчатая диаграмма (градации для текущего Δx) - ЗАВИСИТ ОТ Δx -->
         <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
             <h4 style="color: var(--deep-ink); margin-bottom: 1rem;">📊 Градации (n) для Δx = <span id="currentDeltaXChart">1.0</span></h4>
             <div style="height: 300px; position: relative;">
                 <canvas id="gradationsBarChart"></canvas>
             </div>
             <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7; text-align: center;">
-                Среднее значение по всем продуктам
+                Средние градации по всем продуктам (меняются при изменении Δx)
             </p>
         </div>
     </div>
@@ -159,7 +162,7 @@
                             <th>N</th>
                             <th title="Сумма log₂(n)">Co</th>
                             <th title="Отношение Co/Ch">Go</th>
-                            <th title="Вероятность P = exp(-Go²/2)">P</th>
+                            <th title="Вероятность P = e^(-ln2/Go²)">P</th>
                             <th>Вердикт</th>
                             <th>Действия</th>
                         </tr>
@@ -172,7 +175,7 @@
             
             <!-- Сноска -->
             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--deep-ink); opacity: 0.7;">
-                <p>📌 <strong>Пояснения:</strong> Ch = N, Co = Σ log₂(nᵢ), Go = Co/Ch, P = exp(-Go²/2). 
+                <p>📌 <strong>Пояснения:</strong> Ch = N, Co = Σ log₂(nᵢ), Go = Co/Ch, P = e^(-ln2/Go²). 
                 <strong>✅ Качественный:</strong> P ≤ 0.5 | <strong>❌ Брак:</strong> P > 0.5</p>
             </div>
         </div>
@@ -204,8 +207,8 @@ let comparisonChart = null;
 
 // Загрузка при открытии страницы
 document.addEventListener('DOMContentLoaded', function() {
-    loadAnalysis();
-    loadWeightChart();
+    loadWeightChart(); // Загружаем веса (один раз, не зависит от Δx)
+    loadAnalysis();    // Загружаем анализ с текущим Δx
 });
 
 function updateDeltaX() {
@@ -238,8 +241,8 @@ function updateDeltaXFromInput() {
 
 async function applyDeltaX() {
     currentDelta = parseFloat(document.getElementById('deltaXValue').value);
-    await loadAnalysis();
-    await loadComparisonData();
+    await loadAnalysis();           // Перезагружаем анализ с новым Δx
+    await loadComparisonData();     // Перезагружаем сравнение
 }
 
 async function loadAnalysis() {
@@ -268,7 +271,7 @@ async function loadAnalysis() {
             renderTable(allResults);
             document.getElementById('resultsContainer').style.display = 'block';
             
-            // Обновляем диаграмму градаций
+            // Обновляем диаграмму градаций (ЗАВИСИТ ОТ Δx)
             if (data.characteristic_stats) {
                 updateGradationsChart(data.characteristic_stats);
             }
@@ -597,7 +600,7 @@ function displayModal(data) {
                 </tr>
                 <tr>
                     <td style="padding: 0.5rem;"><strong>Go = Co / Ch</strong> = ${log2Sum} / ${metrics.Ch} = ${metrics.Go.toFixed(3)}</td>
-                    <td style="padding: 0.5rem;"><strong>P = exp(-Go²/2)</strong> = exp(-${(metrics.Go**2).toFixed(3)}/2) = ${metrics.P.toFixed(4)}</td>
+                    <td style="padding: 0.5rem;"><strong>P = e^(-ln2/Go²)</strong> = e^(-0.6931/${(metrics.Go**2).toFixed(3)}) = ${metrics.P.toFixed(4)}</td>
                 </tr>
             </table>
         </div>

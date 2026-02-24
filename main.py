@@ -46,6 +46,13 @@ async def home(request: Request):
         "table_counts": table_counts
     })
 
+# ==================== ДОКУМЕНТАЦИЯ ====================
+@app.get("/spzr/docs", response_class=HTMLResponse)
+async def spzr_docs(request: Request):
+    return templates.TemplateResponse("spzr_docs.html", {
+        "request": request
+    })
+
 # ==================== РАБОТА С ДАННЫМИ ====================
 @app.get("/data", response_class=HTMLResponse)
 async def data_forms(request: Request, table: str = "", page: int = 1):
@@ -201,9 +208,11 @@ async def get_characteristic_stats(delta_x: float = 1.0):
             if xmin <= x <= xmax:
                 g = 2
             elif x > xmax:
-                g = int((x - xmin) / dx) + 1
+                # Отклонение вверх - от верхней границы
+                g = int((x - xmax) / dx) + 1
             else:
-                g = int((xmax - x) / dx) + 1
+                # Отклонение вниз - от нижней границы
+                g = int((xmin - x) / dx) + 1
             
             g = max(2, min(g, 100))
             gradations.append(g)
@@ -280,16 +289,19 @@ async def analyze_all_quality(delta_x: float = 1.0):
             x = ch['real_value']
             xmin = ch['min_norm']
             xmax = ch['max_norm']
-            dx = delta_x  # используем переданный delta_x
+            dx = delta_x
             
+            # ПРАВИЛЬНАЯ ФОРМУЛА ГРАДАЦИЙ ИЗ МЕТОДИЧКИ
             if xmin <= x <= xmax:
-                g = 2
+                g = 2  # В норме
             elif x > xmax:
-                g = int((x - xmin) / dx) + 1
-            else:
-                g = int((xmax - x) / dx) + 1
+                # Отклонение вверх - считаем ОТ ВЕРХНЕЙ ГРАНИЦЫ
+                g = int((x - xmax) / dx) + 1
+            else:  # x < xmin
+                # Отклонение вниз - считаем ОТ НИЖНЕЙ ГРАНИЦЫ
+                g = int((xmin - x) / dx) + 1
             
-            g = max(2, min(g, 100))
+            g = max(2, min(g, 100))  # Ограничиваем
             log2_g = math.log2(g) if g > 0 else 0
             sum_log2 += log2_g
             
@@ -308,7 +320,7 @@ async def analyze_all_quality(delta_x: float = 1.0):
                 'min': xmin,
                 'max': xmax,
                 'gradations': g,
-                'log2': log2_g,
+                'log2': round(log2_g, 3),
                 'weight': ch['weight'] or 1,
                 'in_norm': xmin <= x <= xmax
             })
@@ -316,9 +328,17 @@ async def analyze_all_quality(delta_x: float = 1.0):
         Ch = n
         Co = sum_log2
         Go = Co / Ch if Ch > 0 else 0
-        P = math.exp(- (Go ** 2) / 2)
+        
+        # ПРАВИЛЬНАЯ ФОРМУЛА ИЗ МЕТОДИЧКИ: P = e^(-ln2 / Go^2)
+        if Go > 0:
+            P = math.exp(-math.log(2) / (Go * Go))
+        else:
+            # Если Go=0 (все в норме), то P очень мало (качественный)
+            P = math.exp(-math.log(2) / 0.0001)
+        
         P = round(P, 4)
         
+        # По методичке: P от 0 до 0.5 - качественный
         is_quality = P <= 0.5
         
         if is_quality:
@@ -353,6 +373,8 @@ async def analyze_all_quality(delta_x: float = 1.0):
             'count': len(stats['gradations'])
         })
     
+    # Сортируем: сначала брак (P > 0.5), потом качественные (P <= 0.5)
+    # Внутри каждой группы сортируем по P
     results.sort(key=lambda x: (x['metrics']['is_quality'], x['metrics']['P']))
     
     return {
@@ -414,12 +436,13 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
         xmax = ch['max_norm']
         dx = delta_x
         
+        # ПРАВИЛЬНАЯ ФОРМУЛА ГРАДАЦИЙ
         if xmin <= x <= xmax:
             g = 2
         elif x > xmax:
-            g = int((x - xmin) / dx) + 1
+            g = int((x - xmax) / dx) + 1
         else:
-            g = int((xmax - x) / dx) + 1
+            g = int((xmin - x) / dx) + 1
         
         g = max(2, min(g, 100))
         log2_g = math.log2(g) if g > 0 else 0
@@ -432,7 +455,7 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
             'min': xmin,
             'max': xmax,
             'gradations': g,
-            'log2': log2_g,
+            'log2': round(log2_g, 3),
             'weight': ch['weight'] or 1,
             'in_norm': xmin <= x <= xmax
         })
@@ -440,7 +463,14 @@ async def get_product_detail(product_id: int, supplier_id: int, delta_x: float =
     Ch = n
     Co = sum_log2
     Go = Co / Ch if Ch > 0 else 0
-    P = round(math.exp(- (Go ** 2) / 2), 4)
+    
+    # ПРАВИЛЬНАЯ ФОРМУЛА ВЕРОЯТНОСТИ
+    if Go > 0:
+        P = math.exp(-math.log(2) / (Go * Go))
+    else:
+        P = math.exp(-math.log(2) / 0.0001)
+    
+    P = round(P, 4)
     is_quality = P <= 0.5
     
     return {
@@ -494,12 +524,13 @@ async def train_system_all():
                 xmax = ch['max_norm']
                 dx = delta
                 
+                # ПРАВИЛЬНАЯ ФОРМУЛА
                 if xmin <= x <= xmax:
                     g = 2
                 elif x > xmax:
-                    g = int((x - xmin) / dx) + 1
+                    g = int((x - xmax) / dx) + 1
                 else:
-                    g = int((xmax - x) / dx) + 1
+                    g = int((xmin - x) / dx) + 1
                 
                 g = max(2, min(g, 100))
                 sum_log2 += math.log2(g)
@@ -507,7 +538,12 @@ async def train_system_all():
             Ch = n
             Co = sum_log2
             Go = Co / Ch if Ch > 0 else 0
-            P = math.exp(- (Go ** 2) / 2)
+            
+            # ПРАВИЛЬНАЯ ФОРМУЛА
+            if Go > 0:
+                P = math.exp(-math.log(2) / (Go * Go))
+            else:
+                P = math.exp(-math.log(2) / 0.0001)
             
             if P <= 0.5:
                 quality_count += 1
@@ -520,6 +556,7 @@ async def train_system_all():
             'percent': round(quality_percent, 1)
         }
     
+    # Находим Δx, при котором доля качественных ближе всего к 50%
     best_delta = min(deltas, key=lambda d: abs(results[d]['percent'] - 50))
     
     return {
