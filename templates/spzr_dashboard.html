@@ -44,12 +44,6 @@
                     (меньше значение = выше чувствительность к отклонениям)
                 </p>
             </div>
-            <div style="flex: 1; text-align: center;">
-                <div style="background: var(--bone); padding: 1rem; border-radius: 12px;">
-                    <div style="font-size: 0.9rem; opacity: 0.7;">Всего позиций</div>
-                    <div id="totalCount" style="font-size: 2rem; font-weight: 700; color: var(--deep-ink);">0</div>
-                </div>
-            </div>
         </div>
         
         <!-- Кнопки экспорта -->
@@ -64,7 +58,11 @@
     </div>
     
     <!-- Статистика -->
-    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
+            <div style="font-size: 0.9rem; opacity: 0.7;">Всего позиций</div>
+            <div id="totalCount" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--deep-ink);">0</div>
+        </div>
         <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
             <div style="font-size: 0.9rem; opacity: 0.7;">Качественные (P ≤ 0.5)</div>
             <div id="qualityCount" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--success);">0</div>
@@ -74,12 +72,37 @@
             <div id="defectCount" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--danger);">0</div>
         </div>
         <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
-            <div style="font-size: 0.9rem; opacity: 0.7;">Средний Co/Ch</div>
-            <div id="avgGo" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--clay);">0</div>
-        </div>
-        <div class="stat-card" style="background: white; border-radius: 16px; padding: 1.5rem; text-align: center;">
             <div style="font-size: 0.9rem; opacity: 0.7;">Процент брака</div>
-            <div id="defectPercent" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--clay);">0%</div>
+            <div id="defectPercent" class="stat-number" style="font-size: 2rem; font-weight: 700; color: var(--danger);">0%</div>
+        </div>
+    </div>
+    
+    <!-- Таблица средних показателей по характеристикам (БЕЗ СТОЛБЦА С КОЛИЧЕСТВОМ) -->
+    <div style="background: white; border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h4 style="color: var(--deep-ink);">📊 Средние показатели по характеристикам</h4>
+            <span style="background: var(--bone); padding: 0.3rem 1rem; border-radius: 40px; font-size: 0.85rem;">
+                Δx = <span id="statsDeltaX">1.0</span>
+            </span>
+        </div>
+        <div style="overflow-x: auto;">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Характеристика</th>
+                        <th style="text-align: center;">Средние градации (n̄)</th>
+                        <th style="text-align: center;">Средний log₂(n)</th>
+                        <th style="text-align: center;">Вклад в Co</th>
+                    </tr>
+                </thead>
+                <tbody id="characteristicStatsTable">
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 2rem; color: var(--deep-ink); opacity: 0.6;">
+                            Загрузка данных...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
     
@@ -121,7 +144,7 @@
         </div>
     </div>
     
-    <!-- Фильтры и поиск -->
+    <!-- Фильтры, поиск и сортировка -->
     <div style="display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; justify-content: space-between; align-items: center;">
         <div style="display: flex; gap: 1rem;">
             <button onclick="loadAnalysis()" class="btn btn-primary">
@@ -131,7 +154,20 @@
                 🧠 Подобрать оптимальный Δx
             </button>
         </div>
-        <div style="display: flex; gap: 1rem;">
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <span style="font-weight: 500; color: var(--deep-ink);">Сортировать по:</span>
+            <select id="sortSelect" class="form-control" style="width: 200px;" onchange="sortResults()">
+                <option value="supplier">Поставщик + Продукт (А-Я)</option>
+                <option value="product">Продукт (А-Я)</option>
+                <option value="quality_first">Сначала качественные</option>
+                <option value="defect_first">Сначала брак</option>
+                <option value="p_asc">P (по возрастанию)</option>
+                <option value="p_desc">P (по убыванию)</option>
+                <option value="go_asc">Go (по возрастанию)</option>
+                <option value="go_desc">Go (по убыванию)</option>
+                <option value="co_asc">Co (по возрастанию)</option>
+                <option value="co_desc">Co (по убыванию)</option>
+            </select>
             <select id="filterSelect" class="form-control" style="width: 150px;" onchange="filterResults()">
                 <option value="all">Все позиции</option>
                 <option value="quality">Только качественные</option>
@@ -186,7 +222,15 @@
         <div style="background: white; border-radius: 16px; padding: 2rem; max-width: 900px; width: 90%; max-height: 80vh; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h3 style="color: var(--deep-ink);">Детальный анализ</h3>
-                <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button onclick="exportCurrentProduct('json')" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink);">
+                        📥 JSON
+                    </button>
+                    <button onclick="exportCurrentProduct('excel')" class="btn btn-sm btn-success">
+                        📥 Excel
+                    </button>
+                    <button onclick="closeModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
+                </div>
             </div>
             <div id="modalContent">
                 <!-- Содержимое подгрузится динамически -->
@@ -201,9 +245,12 @@
 <script>
 let allResults = [];
 let currentDelta = 1.0;
+let currentSort = 'supplier';
 let weightChart = null;
 let gradationsChart = null;
 let comparisonChart = null;
+let currentProductId = null;
+let currentSupplierId = null;
 
 // Загрузка при открытии страницы
 document.addEventListener('DOMContentLoaded', function() {
@@ -243,6 +290,7 @@ async function applyDeltaX() {
     currentDelta = parseFloat(document.getElementById('deltaXValue').value);
     await loadAnalysis();           // Перезагружаем анализ с новым Δx
     await loadComparisonData();     // Перезагружаем сравнение
+    document.getElementById('statsDeltaX').textContent = currentDelta;
 }
 
 async function loadAnalysis() {
@@ -261,19 +309,18 @@ async function loadAnalysis() {
             document.getElementById('qualityCount').textContent = data.quality;
             document.getElementById('defectCount').textContent = data.defect;
             
-            const avgGo = data.results.reduce((sum, r) => sum + r.metrics.Go, 0) / data.total;
-            document.getElementById('avgGo').textContent = avgGo.toFixed(3);
-            
             const percent = data.total > 0 ? Math.round(data.defect / data.total * 100) : 0;
             document.getElementById('defectPercent').textContent = percent + '%';
             
-            // Отображаем таблицу
-            renderTable(allResults);
+            // Отображаем таблицу с сортировкой по умолчанию
+            sortResults();
             document.getElementById('resultsContainer').style.display = 'block';
             
-            // Обновляем диаграмму градаций (ЗАВИСИТ ОТ Δx)
+            // Обновляем диаграмму градаций
             if (data.characteristic_stats) {
                 updateGradationsChart(data.characteristic_stats);
+                renderCharacteristicStats(data.characteristic_stats);
+                document.getElementById('statsDeltaX').textContent = currentDelta;
             }
         } else {
             alert('Ошибка загрузки: ' + data.error);
@@ -283,6 +330,117 @@ async function loadAnalysis() {
     } finally {
         document.getElementById('loadingIndicator').style.display = 'none';
     }
+}
+
+// Новая функция для отображения таблицы характеристик (С ИСПРАВЛЕННЫМИ ПРОЦЕНТАМИ)
+function renderCharacteristicStats(stats) {
+    const tbody = document.getElementById('characteristicStatsTable');
+    
+    if (!stats || stats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 2rem;">Нет данных</td></tr>';
+        return;
+    }
+    
+    // Сначала вычисляем сумму всех log₂(n) для правильного расчета процентов
+    let totalSumLog2 = 0;
+    stats.forEach(stat => {
+        const avgLog2 = Math.log2(stat.avg_gradations);
+        totalSumLog2 += avgLog2;
+    });
+    
+    let html = '';
+    stats.forEach(stat => {
+        const avgLog2 = Math.log2(stat.avg_gradations);
+        const percent = (avgLog2 / totalSumLog2 * 100).toFixed(1);
+        
+        html += `
+            <tr>
+                <td><strong>${stat.name}</strong></td>
+                <td style="text-align: center; font-weight: 600; color: var(--deep-ink);">${stat.avg_gradations}</td>
+                <td style="text-align: center;">${avgLog2.toFixed(3)}</td>
+                <td style="text-align: center;">${percent}%</td>
+            </tr>
+        `;
+    });
+    
+    // Добавляем итоговую строку
+    const overallAvgLog2 = (totalSumLog2 / stats.length).toFixed(3);
+    html += `
+        <tr style="background: var(--bone); font-weight: 600;">
+            <td style="text-align: right;"><strong>СУММА/СРЕДНЕЕ:</strong></td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">${overallAvgLog2} (ср.)</td>
+            <td style="text-align: center;">100%</td>
+        </tr>
+    `;
+    
+    tbody.innerHTML = html;
+}
+
+function sortResults() {
+    const sortBy = document.getElementById('sortSelect').value;
+    currentSort = sortBy;
+    
+    let sorted = [...allResults];
+    
+    switch(sortBy) {
+        case 'supplier':
+            sorted.sort((a, b) => {
+                if (a.supplier_name === b.supplier_name) {
+                    return a.product_name.localeCompare(b.product_name);
+                }
+                return a.supplier_name.localeCompare(b.supplier_name);
+            });
+            break;
+            
+        case 'product':
+            sorted.sort((a, b) => a.product_name.localeCompare(b.product_name));
+            break;
+            
+        case 'quality_first':
+            sorted.sort((a, b) => {
+                if (a.metrics.is_quality === b.metrics.is_quality) {
+                    return a.metrics.P - b.metrics.P;
+                }
+                return a.metrics.is_quality ? -1 : 1;
+            });
+            break;
+            
+        case 'defect_first':
+            sorted.sort((a, b) => {
+                if (a.metrics.is_quality === b.metrics.is_quality) {
+                    return b.metrics.P - a.metrics.P;
+                }
+                return a.metrics.is_quality ? 1 : -1;
+            });
+            break;
+            
+        case 'p_asc':
+            sorted.sort((a, b) => a.metrics.P - b.metrics.P);
+            break;
+            
+        case 'p_desc':
+            sorted.sort((a, b) => b.metrics.P - a.metrics.P);
+            break;
+            
+        case 'go_asc':
+            sorted.sort((a, b) => a.metrics.Go - b.metrics.Go);
+            break;
+            
+        case 'go_desc':
+            sorted.sort((a, b) => b.metrics.Go - a.metrics.Go);
+            break;
+            
+        case 'co_asc':
+            sorted.sort((a, b) => a.metrics.Co - b.metrics.Co);
+            break;
+            
+        case 'co_desc':
+            sorted.sort((a, b) => b.metrics.Co - a.metrics.Co);
+            break;
+    }
+    
+    renderTable(sorted);
 }
 
 function renderTable(results) {
@@ -296,7 +454,7 @@ function renderTable(results) {
     
     results.forEach(item => {
         const metrics = item.metrics;
-        const isQuality = metrics.P <= 0.5;
+        const isQuality = metrics.is_quality;
         
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -416,6 +574,18 @@ function updateGradationsChart(stats) {
                 }
             },
             plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            const log2 = Math.log2(value).toFixed(3);
+                            return [
+                                `Градации: ${value}`,
+                                `log₂(n): ${log2}`
+                            ];
+                        }
+                    }
+                },
                 legend: { display: false }
             }
         }
@@ -482,9 +652,9 @@ function filterResults() {
     let filtered = allResults;
     
     if (filter === 'quality') {
-        filtered = filtered.filter(r => r.metrics.P <= 0.5);
+        filtered = filtered.filter(r => r.metrics.is_quality);
     } else if (filter === 'defect') {
-        filtered = filtered.filter(r => r.metrics.P > 0.5);
+        filtered = filtered.filter(r => !r.metrics.is_quality);
     }
     
     if (search) {
@@ -494,10 +664,64 @@ function filterResults() {
         );
     }
     
+    // Применяем текущую сортировку к отфильтрованным результатам
+    const sortBy = document.getElementById('sortSelect').value;
+    
+    switch(sortBy) {
+        case 'supplier':
+            filtered.sort((a, b) => {
+                if (a.supplier_name === b.supplier_name) {
+                    return a.product_name.localeCompare(b.product_name);
+                }
+                return a.supplier_name.localeCompare(b.supplier_name);
+            });
+            break;
+        case 'product':
+            filtered.sort((a, b) => a.product_name.localeCompare(b.product_name));
+            break;
+        case 'quality_first':
+            filtered.sort((a, b) => {
+                if (a.metrics.is_quality === b.metrics.is_quality) {
+                    return a.metrics.P - b.metrics.P;
+                }
+                return a.metrics.is_quality ? -1 : 1;
+            });
+            break;
+        case 'defect_first':
+            filtered.sort((a, b) => {
+                if (a.metrics.is_quality === b.metrics.is_quality) {
+                    return b.metrics.P - a.metrics.P;
+                }
+                return a.metrics.is_quality ? 1 : -1;
+            });
+            break;
+        case 'p_asc':
+            filtered.sort((a, b) => a.metrics.P - b.metrics.P);
+            break;
+        case 'p_desc':
+            filtered.sort((a, b) => b.metrics.P - a.metrics.P);
+            break;
+        case 'go_asc':
+            filtered.sort((a, b) => a.metrics.Go - b.metrics.Go);
+            break;
+        case 'go_desc':
+            filtered.sort((a, b) => b.metrics.Go - a.metrics.Go);
+            break;
+        case 'co_asc':
+            filtered.sort((a, b) => a.metrics.Co - b.metrics.Co);
+            break;
+        case 'co_desc':
+            filtered.sort((a, b) => b.metrics.Co - a.metrics.Co);
+            break;
+    }
+    
     renderTable(filtered);
 }
 
 async function showDetails(productId, supplierId) {
+    currentProductId = productId;
+    currentSupplierId = supplierId;
+    
     try {
         const response = await fetch(`/api/spzr/product-detail?product_id=${productId}&supplier_id=${supplierId}&delta_x=${currentDelta}`);
         const data = await response.json();
@@ -512,11 +736,24 @@ async function showDetails(productId, supplierId) {
     }
 }
 
+async function exportCurrentProduct(format) {
+    if (!currentProductId || !currentSupplierId) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+    
+    window.open(
+        `/api/spzr/product-export?product_id=${currentProductId}&supplier_id=${currentSupplierId}&delta_x=${currentDelta}&format=${format}`, 
+        '_blank'
+    );
+}
+
 function displayModal(data) {
     const product = data.product;
     const chars = data.characteristics;
     const metrics = data.metrics;
-    const isQuality = metrics.P <= 0.5;
+    const summary = data.summary;
+    const isQuality = metrics.is_quality;
     
     // Подсчитываем количество отклонений
     const deviations = chars.filter(c => !c.in_norm).length;
@@ -532,7 +769,7 @@ function displayModal(data) {
                 <td>${c.min} — ${c.max}</td>
                 <td style="font-weight: 600; ${!inNorm ? 'color: var(--danger);' : ''}">${c.real}</td>
                 <td>${c.gradations}</td>
-                <td>${c.log2.toFixed(3)}</td>
+                <td>${c.log2}</td>
                 <td>${c.weight}</td>
                 <td style="text-align: center;">
                     ${inNorm 
@@ -553,8 +790,8 @@ function displayModal(data) {
                 <p><strong>✅ Почему товар КАЧЕСТВЕННЫЙ, хотя есть отклонения?</strong></p>
                 <p>Несмотря на ${deviations} отклонений из ${totalChars}, система считает товар качественным, потому что:</p>
                 <ul>
-                    <li>Отклонения незначительны (малые градации n)</li>
-                    <li>Вероятность P = ${metrics.P} ≤ 0.5 (по методичке стр. 38)</li>
+                    <li>Отклонения незначительны (малые градации n при базовом Δx=1.0)</li>
+                    <li>Вероятность P = ${metrics.base_P.toFixed(4)} ≤ 0.5 (по методичке стр. 38)</li>
                     <li>Сигнал отклонения Co = ${metrics.Co} не превышает порог</li>
                 </ul>
                 <p><em>Пороговое правило: P ≤ 0.5 → качественный</em></p>
@@ -566,8 +803,8 @@ function displayModal(data) {
                 <p><strong>❌ Почему товар БРАК, если большинство характеристик в норме?</strong></p>
                 <p>Хотя только ${deviations} из ${totalChars} характеристик имеют отклонения, система считает товар браком, потому что:</p>
                 <ul>
-                    <li>Отклонения СИЛЬНЫЕ (большие градации n)</li>
-                    <li>Вероятность P = ${metrics.P} > 0.5 (по методичке стр. 38)</li>
+                    <li>Отклонения СИЛЬНЫЕ (большие градации n при базовом Δx=1.0)</li>
+                    <li>Вероятность P = ${metrics.base_P.toFixed(4)} > 0.5 (по методичке стр. 38)</li>
                     <li>Сигнал отклонения Co = ${metrics.Co} превышает порог</li>
                 </ul>
                 <p><em>Пороговое правило: P > 0.5 → брак</em></p>
@@ -592,7 +829,7 @@ function displayModal(data) {
         ${explanation}
         
         <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem;">
-            <h4 style="margin-bottom: 1rem;">Расчет показателей (Δx = ${currentDelta}):</h4>
+            <h4 style="margin-bottom: 1rem;">Расчет показателей (текущий Δx = ${currentDelta}):</h4>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <td style="padding: 0.5rem;"><strong>Ch = N</strong> = ${metrics.Ch}</td>
@@ -603,6 +840,9 @@ function displayModal(data) {
                     <td style="padding: 0.5rem;"><strong>P = e^(-ln2/Go²)</strong> = e^(-0.6931/${(metrics.Go**2).toFixed(3)}) = ${metrics.P.toFixed(4)}</td>
                 </tr>
             </table>
+            <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--deep-ink); opacity: 0.7;">
+                <strong>Базовое P (при Δx=1.0):</strong> ${metrics.base_P.toFixed(4)} — именно это значение определяет вердикт
+            </p>
         </div>
         
         <h4 style="margin-bottom: 1rem;">Детализация характеристик</h4>
@@ -632,9 +872,13 @@ function displayModal(data) {
                 <li>Сумма log₂(n) = ${log2Sum}</li>
                 <li>Количество характеристик N = ${metrics.Ch}</li>
                 <li>Отношение Go = ${metrics.Go.toFixed(3)}</li>
-                <li><strong>Вероятность P = ${metrics.P.toFixed(4)}</strong></li>
+                <li><strong>Вероятность P (текущая) = ${metrics.P.toFixed(4)}</strong></li>
+                <li><strong>Базовое P (при Δx=1.0) = ${metrics.base_P.toFixed(4)}</strong></li>
                 <li><strong>Правило:</strong> P ${isQuality ? '≤ 0.5 → КАЧЕСТВЕННЫЙ' : '> 0.5 → БРАК'}</li>
             </ul>
+            <p style="margin-top: 0.5rem; font-style: italic; color: var(--deep-ink); opacity: 0.7;">
+                ⚠️ Вердикт НЕ МЕНЯЕТСЯ при изменении Δx. Δx влияет только на отображение градаций.
+            </p>
         </div>
     `;
     

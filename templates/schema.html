@@ -1,0 +1,575 @@
+{% extends "base.html" %}
+
+{% block title %}Схема данных - Склад одежды{% endblock %}
+
+{% block content %}
+<div class="schema-container">
+    <h1 class="page-title">📊 Схема данных</h1>
+    <p style="color: var(--deep-ink); opacity: 0.7; margin-bottom: 2rem; font-size: 1.1rem;">
+        Визуальное представление связей между таблицами базы данных (как в Microsoft Access)
+    </p>
+
+    <!-- Панель управления -->
+    <div style="background: white; border-radius: 16px; padding: 1rem 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border); display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span style="font-weight: 500;">Масштаб:</span>
+            <button onclick="zoomIn()" class="btn btn-sm" style="padding: 0.3rem 0.8rem;">➕</button>
+            <span id="zoomLevel" style="min-width: 60px; text-align: center;">100%</span>
+            <button onclick="zoomOut()" class="btn btn-sm" style="padding: 0.3rem 0.8rem;">➖</button>
+            <button onclick="resetZoom()" class="btn btn-sm" style="margin-left: 0.5rem;">↺ Сброс</button>
+            <button onclick="resetPositions()" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink); margin-left: 0.5rem;">
+                ↺ Сбросить позиции
+            </button>
+        </div>
+        
+        <div style="display: flex; gap: 0.5rem; align-items: center; margin-left: auto;">
+            <button onclick="toggleAllTables()" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink);">
+                🔘 Скрыть/показать все
+            </button>
+            <button onclick="exportSchema()" class="btn btn-sm btn-success">
+                📥 Сохранить как PNG
+            </button>
+            <button onclick="showSqlDdl()" class="btn btn-sm" style="background: var(--deep-ink); color: white;">
+                📋 SQL DDL
+            </button>
+        </div>
+    </div>
+
+    <!-- Легенда (УБРАНО "Направление связи") -->
+    <div style="display: flex; gap: 2rem; margin-bottom: 1rem; flex-wrap: wrap; background: var(--bone); padding: 0.8rem 1.5rem; border-radius: 40px; font-size: 0.9rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 20px; height: 20px; background: #1A2A3A; border-radius: 4px;"></span>
+            <span>Первичный ключ (PK)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 20px; height: 20px; background: #D4B28C; border-radius: 4px;"></span>
+            <span>Внешний ключ (FK)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 30px; height: 2px; background: #2C3E50;"></span>
+            <span>Связь один-ко-многим</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 30px; height: 2px; background: #2C3E50; border-bottom: 2px dashed #2C3E50;"></span>
+            <span>Каскадное удаление</span>
+        </div>
+    </div>
+
+    <!-- Контейнер для схемы -->
+    <div id="schemaWrapper" style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); overflow: auto; min-height: 600px; position: relative;">
+        <div id="schemaCanvas" style="position: relative; min-width: 1200px; min-height: 700px; transform-origin: 0 0; transition: transform 0.2s;">
+            <!-- Связи будут отрисованы здесь (SVG) -->
+            <svg id="relationshipsSvg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;"></svg>
+            
+            <!-- Таблицы будут добавлены сюда динамически -->
+            <div id="tablesContainer" style="position: relative; z-index: 2;">
+                <!-- JS заполнит это место -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Подробная информация о связях -->
+    <div style="margin-top: 2rem; background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+        <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">🔗 Детали связей</h3>
+        <div style="overflow-x: auto;">
+            <table class="data-table" id="relationshipsTable">
+                <thead>
+                    <tr>
+                        <th>Родительская таблица</th>
+                        <th>Поле</th>
+                        <th></th>
+                        <th>Дочерняя таблица</th>
+                        <th>Поле</th>
+                        <th>Тип связи</th>
+                        <th>Каскадное удаление</th>
+                    </tr>
+                </thead>
+                <tbody id="relationshipsBody">
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">Загрузка данных...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Модальное окно с SQL DDL -->
+    <div id="sqlModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 16px; padding: 2rem; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="color: var(--deep-ink);">📜 SQL DDL (структура таблиц)</h3>
+                <button onclick="closeSqlModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <pre id="sqlDdlContent" style="background: #1e2b3a; color: #f8f5f0; padding: 1.5rem; border-radius: 12px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 0.9rem; white-space: pre-wrap;"></pre>
+            <div style="display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end;">
+                <button onclick="copySqlToClipboard()" class="btn btn-primary">📋 Копировать</button>
+                <button onclick="closeSqlModal()" class="btn">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let tables = [];
+let relationships = [];
+let currentZoom = 1.0;
+let tableElements = {};
+let isDragging = false;
+
+// ФИКСИРОВАННЫЕ ПОЗИЦИИ ТАБЛИЦ С РАССТОЯНИЕМ
+const DEFAULT_POSITIONS = {
+    'suppliers': { x: 50, y: 50 },
+    'products': { x: 450, y: 50 },      // 400px расстояние по X
+    'characteristics': { x: 50, y: 350 }, // 300px расстояние по Y от suppliers
+    'product_characteristics': { x: 450, y: 200 } // по центру между products и characteristics
+};
+
+// Загрузка данных при открытии страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadSchema();
+    
+    // Добавляем обработчик колесика мыши для зума
+    const wrapper = document.getElementById('schemaWrapper');
+    wrapper.addEventListener('wheel', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            currentZoom = Math.min(Math.max(currentZoom + delta, 0.5), 2.0);
+            updateZoom();
+        }
+    });
+});
+
+function zoomIn() {
+    currentZoom = Math.min(currentZoom + 0.1, 2.0);
+    updateZoom();
+}
+
+function zoomOut() {
+    currentZoom = Math.max(currentZoom - 0.1, 0.5);
+    updateZoom();
+}
+
+function resetZoom() {
+    currentZoom = 1.0;
+    updateZoom();
+}
+
+function resetPositions() {
+    // Очищаем сохраненные позиции
+    localStorage.removeItem('tablePositions');
+    // Перезагружаем схему с позициями по умолчанию
+    renderTables();
+    setTimeout(renderRelationships, 100);
+}
+
+function updateZoom() {
+    document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
+    const canvas = document.getElementById('schemaCanvas');
+    canvas.style.transform = `scale(${currentZoom})`;
+    canvas.style.transformOrigin = '0 0';
+    
+    // Перерисовываем связи после изменения масштаба
+    setTimeout(renderRelationships, 50);
+}
+
+async function loadSchema() {
+    try {
+        // Загружаем список таблиц
+        const tablesResponse = await fetch('/api/schema/tables');
+        tables = await tablesResponse.json();
+        
+        // Загружаем связи
+        const relResponse = await fetch('/api/schema/relationships');
+        relationships = await relResponse.json();
+        
+        // Отрисовываем таблицы
+        renderTables();
+        
+        // Отрисовываем связи
+        setTimeout(renderRelationships, 100);
+        
+        // Заполняем таблицу связей
+        renderRelationshipsTable();
+        
+        // Загружаем SQL DDL
+        loadSqlDdl();
+        
+    } catch (e) {
+        console.error('Ошибка загрузки схемы:', e);
+    }
+}
+
+function renderTables() {
+    const container = document.getElementById('tablesContainer');
+    container.innerHTML = '';
+    tableElements = {};
+    
+    // Загружаем сохраненные позиции, если есть
+    const savedPositions = JSON.parse(localStorage.getItem('tablePositions') || '{}');
+    
+    tables.forEach(table => {
+        // Используем сохраненную позицию или позицию по умолчанию
+        let pos;
+        if (savedPositions[table.name]) {
+            pos = savedPositions[table.name];
+        } else {
+            pos = DEFAULT_POSITIONS[table.name] || { 
+                x: 50 + Math.random() * 100, 
+                y: 50 + Math.random() * 100 
+            };
+        }
+        
+        const tableDiv = document.createElement('div');
+        tableDiv.className = 'schema-table';
+        tableDiv.id = `table-${table.name}`;
+        tableDiv.setAttribute('data-table', table.name);
+        tableDiv.style.cssText = `
+            position: absolute;
+            left: ${pos.x}px;
+            top: ${pos.y}px;
+            background: white;
+            border: 2px solid var(--deep-ink);
+            border-radius: 12px;
+            min-width: 280px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            cursor: move;
+            user-select: none;
+            z-index: 10;
+            transition: box-shadow 0.2s;
+        `;
+        
+        // Заголовок таблицы
+        const header = document.createElement('div');
+        header.style.cssText = `
+            background: var(--deep-ink);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 10px 10px 0 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+        `;
+        header.innerHTML = `
+            <span>📋 ${table.name}</span>
+            <span style="font-size: 0.8rem; opacity: 0.8;">${table.columns.length} полей</span>
+        `;
+        
+        // Содержимое таблицы
+        const content = document.createElement('div');
+        content.style.cssText = `
+            padding: 0.5rem 0;
+            max-height: 300px;
+            overflow-y: auto;
+        `;
+        
+        let columnsHtml = '';
+        table.columns.forEach(col => {
+            const isPk = col.is_primary_key;
+            const isFk = col.is_foreign_key;
+            columnsHtml += `
+                <div style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: ${isPk ? '#1A2A3A' : (isFk ? '#D4B28C' : 'transparent')};"></span>
+                    <span style="font-weight: ${isPk ? '600' : 'normal'}; color: var(--deep-ink);">${col.column_name}</span>
+                    <span style="font-size: 0.8rem; color: var(--deep-ink); opacity: 0.6; margin-left: auto;">${col.data_type}</span>
+                    ${isPk ? '<span style="font-size: 0.7rem; background: #1A2A3A; color: white; padding: 0.1rem 0.4rem; border-radius: 4px;">PK</span>' : ''}
+                    ${isFk ? '<span style="font-size: 0.7rem; background: #D4B28C; color: var(--deep-ink); padding: 0.1rem 0.4rem; border-radius: 4px;">FK</span>' : ''}
+                </div>
+            `;
+        });
+        
+        content.innerHTML = columnsHtml;
+        
+        // Кнопка скрытия
+        const hideBtn = document.createElement('div');
+        hideBtn.style.cssText = `
+            padding: 0.5rem 1rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--deep-ink);
+            opacity: 0.7;
+            cursor: pointer;
+        `;
+        hideBtn.innerHTML = '👁️ Скрыть';
+        hideBtn.onclick = (e) => {
+            e.stopPropagation();
+            toggleTable(table.name);
+        };
+        
+        tableDiv.appendChild(header);
+        tableDiv.appendChild(content);
+        tableDiv.appendChild(hideBtn);
+        
+        // Добавляем возможность перетаскивания
+        makeDraggable(tableDiv, table.name);
+        
+        container.appendChild(tableDiv);
+        tableElements[table.name] = tableDiv;
+    });
+}
+
+function makeDraggable(element, tableName) {
+    let startX = 0, startY = 0;
+    let startLeft = 0, startTop = 0;
+    
+    // Используем заголовок для перетаскивания
+    const header = element.querySelector('div:first-child');
+    
+    header.onmousedown = dragMouseDown;
+    
+    function dragMouseDown(e) {
+        e.preventDefault();
+        
+        // Получаем начальные координаты мыши
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        // Получаем текущие координаты элемента
+        const left = parseInt(element.style.left) || 0;
+        const top = parseInt(element.style.top) || 0;
+        startLeft = left;
+        startTop = top;
+        
+        isDragging = true;
+        
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+        
+        element.style.boxShadow = '0 12px 24px rgba(0,0,0,0.2)';
+        element.style.zIndex = '100';
+    }
+    
+    function elementDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        
+        // Вычисляем смещение
+        const dx = (e.clientX - startX) / currentZoom;
+        const dy = (e.clientY - startY) / currentZoom;
+        
+        // Устанавливаем новую позицию
+        element.style.left = (startLeft + dx) + 'px';
+        element.style.top = (startTop + dy) + 'px';
+        
+        // Перерисовываем связи
+        renderRelationships();
+    }
+    
+    function closeDragElement() {
+        isDragging = false;
+        document.onmouseup = null;
+        document.onmousemove = null;
+        
+        element.style.boxShadow = '0 8px 16px rgba(0,0,0,0.1)';
+        element.style.zIndex = '10';
+        
+        // Сохраняем позицию
+        if (tableName) {
+            saveTablePosition(tableName, {
+                x: parseInt(element.style.left),
+                y: parseInt(element.style.top)
+            });
+        }
+    }
+}
+
+function saveTablePosition(tableName, pos) {
+    let positions = JSON.parse(localStorage.getItem('tablePositions') || '{}');
+    positions[tableName] = pos;
+    localStorage.setItem('tablePositions', JSON.stringify(positions));
+}
+
+function toggleTable(tableName) {
+    const table = tableElements[tableName];
+    if (table) {
+        if (table.style.display === 'none') {
+            table.style.display = 'block';
+        } else {
+            table.style.display = 'none';
+        }
+        renderRelationships();
+    }
+}
+
+function toggleAllTables() {
+    const anyHidden = Object.values(tableElements).some(t => t.style.display === 'none');
+    Object.values(tableElements).forEach(t => {
+        t.style.display = anyHidden ? 'block' : 'none';
+    });
+    renderRelationships();
+}
+
+function renderRelationships() {
+    const svg = document.getElementById('relationshipsSvg');
+    svg.innerHTML = '';
+    
+    const canvas = document.getElementById('schemaCanvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    relationships.forEach(rel => {
+        const fromTable = tableElements[rel.from_table];
+        const toTable = tableElements[rel.to_table];
+        
+        if (!fromTable || !toTable || fromTable.style.display === 'none' || toTable.style.display === 'none') {
+            return;
+        }
+        
+        // Получаем координаты центров таблиц относительно canvas
+        const fromRect = fromTable.getBoundingClientRect();
+        const toRect = toTable.getBoundingClientRect();
+        
+        // Пересчитываем в координаты canvas с учетом масштаба
+        const fromX = (fromRect.left + fromRect.width / 2 - canvasRect.left) / currentZoom;
+        const fromY = (fromRect.top + fromRect.height / 2 - canvasRect.top) / currentZoom;
+        const toX = (toRect.left + toRect.width / 2 - canvasRect.left) / currentZoom;
+        const toY = (toRect.top + toRect.height / 2 - canvasRect.top) / currentZoom;
+        
+        // Определяем тип связи по данным из БД
+        const isCascade = rel.delete_rule === 'CASCADE';
+        
+        // Рисуем линию
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', fromX);
+        line.setAttribute('y1', fromY);
+        line.setAttribute('x2', toX);
+        line.setAttribute('y2', toY);
+        line.setAttribute('stroke', '#2C3E50');
+        line.setAttribute('stroke-width', '2');
+        
+        // Если каскадное удаление - пунктир
+        if (isCascade) {
+            line.setAttribute('stroke-dasharray', '5,5');
+        }
+        
+        // Добавляем стрелку на конце (только направление, убрали подпись)
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        const arrowSize = 6;
+        
+        const arrowX = toX - 15 * Math.cos(angle);
+        const arrowY = toY - 15 * Math.sin(angle);
+        
+        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        const arrowPoints = [
+            [arrowX, arrowY],
+            [arrowX - arrowSize * Math.cos(angle - 0.5), arrowY - arrowSize * Math.sin(angle - 0.5)],
+            [arrowX - arrowSize * Math.cos(angle + 0.5), arrowY - arrowSize * Math.sin(angle + 0.5)]
+        ];
+        arrow.setAttribute('points', arrowPoints.map(p => p.join(',')).join(' '));
+        arrow.setAttribute('fill', '#2C3E50');
+        
+        svg.appendChild(line);
+        svg.appendChild(arrow);
+    });
+}
+
+function renderRelationshipsTable() {
+    const tbody = document.getElementById('relationshipsBody');
+    
+    if (!relationships || relationships.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Нет связей между таблицами</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    relationships.forEach(rel => {
+        const isCascade = rel.delete_rule === 'CASCADE';
+        html += `
+            <tr>
+                <td><strong>${rel.from_table}</strong></td>
+                <td>${rel.from_column}</td>
+                <td style="text-align: center;">→</td>
+                <td><strong>${rel.to_table}</strong></td>
+                <td>${rel.to_column}</td>
+                <td>Один-ко-многим</td>
+                <td>${isCascade ? '✅ Да' : '❌ Нет'}</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+async function loadSqlDdl() {
+    try {
+        const response = await fetch('/api/schema/ddl');
+        const data = await response.json();
+        document.getElementById('sqlDdlContent').textContent = data.ddl;
+    } catch (e) {
+        console.error('Ошибка загрузки DDL:', e);
+    }
+}
+
+function showSqlDdl() {
+    document.getElementById('sqlModal').style.display = 'flex';
+}
+
+function closeSqlModal() {
+    document.getElementById('sqlModal').style.display = 'none';
+}
+
+function copySqlToClipboard() {
+    const sql = document.getElementById('sqlDdlContent').textContent;
+    navigator.clipboard.writeText(sql).then(() => {
+        alert('SQL скопирован в буфер обмена');
+    });
+}
+
+function exportSchema() {
+    // Используем html2canvas для сохранения как PNG
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    script.onload = function() {
+        const canvas = document.getElementById('schemaCanvas');
+        html2canvas(canvas, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            allowTaint: false,
+            useCORS: true
+        }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'schema.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    };
+    document.head.appendChild(script);
+}
+
+// Обновляем связи при изменении размера окна
+window.addEventListener('resize', () => {
+    renderRelationships();
+});
+
+// Периодическое обновление связей (для плавности при перетаскивании)
+setInterval(renderRelationships, 50);
+</script>
+
+<style>
+.schema-table:hover {
+    box-shadow: 0 12px 24px rgba(0,0,0,0.15) !important;
+}
+.schema-table .pk-icon {
+    background: var(--deep-ink);
+    color: white;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    margin-left: 0.5rem;
+}
+.schema-table .fk-icon {
+    background: var(--sand);
+    color: var(--deep-ink);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    margin-left: 0.5rem;
+}
+#relationshipsSvg line, #relationshipsSvg polygon {
+    transition: all 0.1s;
+}
+</style>
+{% endblock %}

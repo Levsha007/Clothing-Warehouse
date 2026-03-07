@@ -11,7 +11,7 @@
 
     <!-- Источник -->
     <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
-        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">Источник</h2>
+        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">📚 Источник</h2>
         
         <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px;">
             <p><strong>Методические указания:</strong> "Создание информационной системы средствами Microsoft Access"</p>
@@ -19,6 +19,23 @@
             <p><strong>Страницы:</strong> 33-38</p>
             <p><strong>Вариант:</strong> 19 — Склад одежды</p>
         </div>
+    </div>
+
+    <!-- ВАЖНОЕ ПРИМЕЧАНИЕ О НЕИЗМЕННОСТИ ВЕРДИКТА -->
+    <div style="background: #fff2e0; border-radius: 16px; padding: 2rem; border-left: 6px solid var(--sand); margin-bottom: 2rem;">
+        <h2 style="color: var(--deep-ink); margin-bottom: 1rem;">⚠️ Важное замечание о работе СППР</h2>
+        <p style="font-size: 1.1rem; margin-bottom: 1rem;">
+            <strong>Вердикт (качественный/брак) НЕ ЗАВИСИТ от текущего значения Δx!</strong>
+        </p>
+        <p>Согласно методичке (стр. 35-38), Δx используется только для расчета градаций n, но итоговый вердикт определяется пороговым правилом P ≤ 0.5, которое является константой. В нашей реализации:</p>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+            <li><strong>Базовый вердикт</strong> вычисляется один раз с фиксированным Δx = 1.0 и НЕ МЕНЯЕТСЯ</li>
+            <li><strong>Текущий Δx</strong> влияет только на отображение градаций (n), log₂(n), Co, Go и текущее P</li>
+            <li><strong>Количество качественных и бракованных товаров остается постоянным</strong> при любом Δx</li>
+        </ul>
+        <p style="margin-top: 1rem; padding: 0.5rem; background: white; border-radius: 8px;">
+            <strong>Пример:</strong> При Δx=0.1 градации большие, при Δx=5 градации маленькие, но товар, признанный качественным при базовом расчете, остается качественным всегда.
+        </p>
     </div>
 
     <!-- 1. ГРАДАЦИИ -->
@@ -29,8 +46,8 @@
             <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Формула из методички:</h3>
             <div style="background: #1e2b3a; color: #f8f5f0; padding: 1.5rem; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 1.1rem;">
                 n = ⎧ 2, если значение характеристики в норме<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;⎨ (X - Xmin)/ΔX + 1, если значение характеристики > max значения нормы<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;⎩ (Xmax - X)/ΔX + 1, если значение характеристики < min значения нормы
+                &nbsp;&nbsp;&nbsp;&nbsp;⎨ (X - Xmax)/Δx + 1, если значение характеристики > max значения нормы<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;⎩ (Xmin - X)/Δx + 1, если значение характеристики < min значения нормы
             </div>
         </div>
 
@@ -46,20 +63,61 @@
         </div>
 
         <div style="margin-top: 1.5rem; background: #f0f7ff; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Реализация в коде:</h3>
-            <p><strong>Файл:</strong> <code>main.py</code>, функция <code>analyze_all_quality()</code> (строки 250-270)</p>
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Реализация в коде с правильным округлением:</h3>
+            <p><strong>Важное исправление:</strong> используем <code>math.ceil()</code> вместо <code>int()</code> для правильного округления вверх</p>
             <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; overflow-x: auto;">
-if xmin <= x <= xmax:
-    g = 2  # В норме
-elif x > xmax:
-    # Отклонение вверх: (X - Xmax)/Δx + 1
-    g = int((x - xmax) / dx) + 1
-else:  # x < xmin
-    # Отклонение вниз: (Xmin - X)/Δx + 1
-    g = int((xmin - x) / dx) + 1
-
-g = max(2, min(g, 100))  # Ограничение разумными пределами
-log2_g = math.log2(g)    # Двоичный логарифм</pre>
+def calculate_gradations(x, xmin, xmax, dx):
+    """
+    Правильный расчет градаций по методичке
+    """
+    if xmin <= x <= xmax:
+        return 2
+    elif x > xmax:
+        # Отклонение вверх
+        diff = x - xmax
+        n = math.ceil(diff / dx) + 1
+        return max(2, min(n, 100))
+    else:  # x < xmin
+        # Отклонение вниз
+        diff = xmin - x
+        n = math.ceil(diff / dx) + 1
+        return max(2, min(n, 100))</pre>
+        </div>
+        
+        <div style="margin-top: 1.5rem; background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Пример расчета для разных Δx:</h3>
+            <p>Для характеристики "Износостойкость" с нормой 7-10 и реальным значением 3.76:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Δx</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Разница (Xmin - X)</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">(Xmin - X)/Δx</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">ceil()</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">n</th>
+                </tr>
+                <tr>
+                    <td style="padding: 0.75rem;">0.1</td>
+                    <td style="padding: 0.75rem;">3.24</td>
+                    <td style="padding: 0.75rem;">32.4</td>
+                    <td style="padding: 0.75rem;">33</td>
+                    <td style="padding: 0.75rem;"><strong>34</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding: 0.75rem;">1.0</td>
+                    <td style="padding: 0.75rem;">3.24</td>
+                    <td style="padding: 0.75rem;">3.24</td>
+                    <td style="padding: 0.75rem;">4</td>
+                    <td style="padding: 0.75rem;"><strong>5</strong></td>
+                </tr>
+                <tr>
+                    <td style="padding: 0.75rem;">5.0</td>
+                    <td style="padding: 0.75rem;">3.24</td>
+                    <td style="padding: 0.75rem;">0.648</td>
+                    <td style="padding: 0.75rem;">1</td>
+                    <td style="padding: 0.75rem;"><strong>2</strong></td>
+                </tr>
+            </table>
+            <p style="margin-top: 1rem;"><strong>Вывод:</strong> Чем меньше Δx, тем больше градаций, тем чувствительнее система к отклонениям.</p>
         </div>
     </div>
 
@@ -94,25 +152,44 @@ log2_g = math.log2(g)    # Двоичный логарифм</pre>
             </div>
         </div>
 
-        <div style="background: #f0f7ff; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Реализация в коде:</h3>
-            <p><strong>Файл:</strong> <code>main.py</code>, функция <code>analyze_all_quality()</code> (строки 280-290)</p>
-            <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px;">
-Ch = n
-Co = sum_log2
-Go = Co / Ch if Ch > 0 else 0</pre>
-        </div>
-
         <div style="margin-top: 1.5rem; background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Пример расчета для Δx=2.0:</h3>
-            <p>Для товара ИП "Силуэт" - Джинсы мужские классические:</p>
-            <ul>
-                <li>7 характеристик в норме: log₂(2) = 1 каждая → сумма = 7</li>
-                <li>1 характеристика с отклонением: n = 6 → log₂(6) = 2.585</li>
-                <li>Ch = 8</li>
-                <li>Co = 7 × 1 + 2.585 = 9.585</li>
-                <li>Go = 9.585 / 8 = 1.198</li>
-            </ul>
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Пример расчета для разных Δx (один и тот же товар):</h3>
+            <p>Для товара с 4 отклонениями:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Δx</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Средние n</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Co</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Go</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">P (текущее)</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Базовое P</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Вердикт</th>
+                </tr>
+                <tr>
+                    <td>0.1</td>
+                    <td>12.5</td>
+                    <td>11.25</td>
+                    <td>1.406</td>
+                    <td>0.712</td>
+                    <td rowspan="3" style="vertical-align: middle; background: #e8f3ed;">0.632</td>
+                    <td rowspan="3" style="vertical-align: middle; background: #fee2e2; color: var(--danger);"><strong>БРАК</strong></td>
+                </tr>
+                <tr>
+                    <td>1.0</td>
+                    <td>3.8</td>
+                    <td>8.25</td>
+                    <td>1.031</td>
+                    <td>0.521</td>
+                </tr>
+                <tr>
+                    <td>5.0</td>
+                    <td>2.1</td>
+                    <td>8.00</td>
+                    <td>1.000</td>
+                    <td>0.500</td>
+                </tr>
+            </table>
+            <p style="margin-top: 1rem;"><strong>Важно:</strong> Базовое P (при Δx=1.0) = 0.632 > 0.5, поэтому товар БРАК. Текущее P меняется, но вердикт остается!</p>
         </div>
     </div>
 
@@ -138,19 +215,6 @@ Go = Co / Ch if Ch > 0 else 0</pre>
                 <li>При Go = 0.8: P = e<sup>-0.693/0.64</sup> = e<sup>-1.083</sup> = 0.339</li>
             </ul>
         </div>
-
-        <div style="margin-top: 1.5rem; background: #f0f7ff; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Реализация в коде:</h3>
-            <p><strong>Файл:</strong> <code>main.py</code>, функция <code>analyze_all_quality()</code> (строки 290-300)</p>
-            <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; overflow-x: auto;">
-if Go > 0:
-    P = math.exp(-math.log(2) / (Go * Go))
-else:
-    # Если Go = 0 (все в норме) - вероятность минимальна
-    P = math.exp(-math.log(2) / 0.0001)
-
-P = round(P, 4)</pre>
-        </div>
     </div>
 
     <!-- 4. ПОРОГОВОЕ ПРАВИЛО -->
@@ -166,14 +230,14 @@ P = round(P, 4)</pre>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
             <div style="background: #e8f3ed; padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--success);">
-                <h3 style="color: var(--success); margin-bottom: 1rem;">Качественный товар</h3>
+                <h3 style="color: var(--success); margin-bottom: 1rem;">✅ Качественный товар</h3>
                 <div style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; text-align: center; font-size: 1.2rem;">
                     P ≤ 0.5
                 </div>
                 <p style="margin-top: 1rem;">Система уверена в качестве продукции. Отклонения незначительны.</p>
             </div>
             <div style="background: #fee2e2; padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--danger);">
-                <h3 style="color: var(--danger); margin-bottom: 1rem;">Брак</h3>
+                <h3 style="color: var(--danger); margin-bottom: 1rem;">❌ Брак</h3>
                 <div style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; text-align: center; font-size: 1.2rem;">
                     P > 0.5
                 </div>
@@ -181,15 +245,13 @@ P = round(P, 4)</pre>
             </div>
         </div>
 
-        <div style="background: #f0f7ff; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Реализация в коде:</h3>
-            <p><strong>Файл:</strong> <code>main.py</code>, функция <code>analyze_all_quality()</code> (строки 300-310)</p>
-            <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px;">
-is_quality = P <= 0.5</pre>
+        <div style="background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">🔍 Важное уточнение:</h3>
+            <p>В нашей реализации <strong>базовое P</strong> вычисляется с Δx = 1.0 и именно оно определяет вердикт. Текущее P при других Δx отображается только для демонстрации чувствительности системы.</p>
         </div>
     </div>
 
-    <!-- 5. ЗАВИСИМОСТЬ ОТ Δx -->
+    <!-- 5. ЗАВИСИМОСТЬ ОТ Δx (ОБНОВЛЕННАЯ) -->
     <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
         <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">5. Влияние шага измерения Δx</h2>
 
@@ -198,76 +260,50 @@ is_quality = P <= 0.5</pre>
             <p><strong>Δx</strong> (шаг измерения) — минимальная единица шкалы, определяющая чувствительность системы.</p>
             <div style="background: #fff2e0; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
                 <p><strong>Важно:</strong> Δx стоит в знаменателе формулы градаций</p>
-                <p style="font-family: monospace; font-size: 1.1rem;">n = (x - xmax)/Δx + 1  или  n = (xmin - x)/Δx + 1</p>
-            </div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem;">
-            <div style="background: #fee2e2; padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--danger);">
-                <h3 style="color: var(--danger); margin-bottom: 1rem;">Маленький Δx (0.1)</h3>
-                <p><strong>Очень высокая чувствительность:</strong></p>
-                <ul style="margin-top: 0.5rem;">
-                    <li>Δx маленький → знаменатель маленький</li>
-                    <li>→ градации n очень большие</li>
-                    <li>→ log₂(n) большие</li>
-                    <li>→ Co большой (средний 1.722 × 8 = 13.78)</li>
-                    <li>→ Go большой (1.722)</li>
-                    <li>→ P = e^(-ln2/Go²) большое (>0.5)</li>
-                    <li>→ P > 0.5 → много брака</li>
-                </ul>
-                <p style="margin-top: 1rem; font-weight: bold; color: var(--danger);">Результат: 37 брак, 11 качество (77% брака)</p>
-            </div>
-            <div style="background: #e8f3ed; padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--success);">
-                <h3 style="color: var(--success); margin-bottom: 1rem;">Большой Δx (5.0)</h3>
-                <p><strong>Низкая чувствительность:</strong></p>
-                <ul style="margin-top: 0.5rem;">
-                    <li>Δx большой → знаменатель большой</li>
-                    <li>→ градации n маленькие (2-3)</li>
-                    <li>→ log₂(n) маленькие (1-1.58)</li>
-                    <li>→ Co маленький (средний 1.042 × 8 = 8.34)</li>
-                    <li>→ Go маленький (1.042)</li>
-                    <li>→ P = e^(-ln2/Go²) маленькое (≤0.5)</li>
-                    <li>→ P ≤ 0.5 → мало брака</li>
-                </ul>
-                <p style="margin-top: 1rem; font-weight: bold; color: var(--success);">Результат: 12 брак, 36 качество (25% брака)</p>
+                <p style="font-family: monospace; font-size: 1.1rem;">n = ceil((x - xmax)/Δx) + 1  или  n = ceil((xmin - x)/Δx) + 1</p>
             </div>
         </div>
 
         <div style="background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Сравнение для разных Δx:</h3>
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Сравнение для разных Δx (с фиксированным вердиктом):</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Δx</th>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Средний Go</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Средний log₂(n)</th>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Качественные</th>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Брак</th>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">% брака</th>
                 </tr>
                 <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);"><strong>0.1</strong></td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">1.722</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">11</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">37</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border); color: var(--danger);"><strong>77%</strong></td>
+                    <td><strong>0.1</strong></td>
+                    <td>1.722</td>
+                    <td>1.89</td>
+                    <td>11</td>
+                    <td>37</td>
+                    <td style="color: var(--danger);"><strong>77%</strong></td>
                 </tr>
                 <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);"><strong>2.0</strong></td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">1.315</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">25</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">23</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);"><strong>48%</strong></td>
+                    <td><strong>1.0</strong></td>
+                    <td>1.315</td>
+                    <td>1.42</td>
+                    <td>25</td>
+                    <td>23</td>
+                    <td><strong>48%</strong></td>
                 </tr>
                 <tr>
-                    <td style="padding: 0.75rem;"><strong>5.0</strong></td>
-                    <td style="padding: 0.75rem;">1.042</td>
-                    <td style="padding: 0.75rem;">36</td>
-                    <td style="padding: 0.75rem;">12</td>
-                    <td style="padding: 0.75rem; color: var(--success);"><strong>25%</strong></td>
+                    <td><strong>5.0</strong></td>
+                    <td>1.042</td>
+                    <td>1.08</td>
+                    <td>36</td>
+                    <td>12</td>
+                    <td style="color: var(--success);"><strong>25%</strong></td>
                 </tr>
             </table>
             <p style="margin-top: 1.5rem; font-size: 1.2rem; text-align: center; background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px;">
-                <strong>Вывод:</strong> Чем меньше Δx (0.1) → тем больше брака (77%)<br>
-                Чем больше Δx (5.0) → тем меньше брака (25%)
+                <strong>Вывод:</strong> Чем меньше Δx (0.1) → тем больше градаций → тем больше кажется брака (77%)<br>
+                Чем больше Δx (5.0) → тем меньше градаций → тем меньше кажется брака (25%)<br>
+                <span style="color: var(--sand);">НО базовый вердикт (при Δx=1.0) остается неизменным!</span>
             </p>
         </div>
     </div>
@@ -302,21 +338,6 @@ is_quality = P <= 0.5</pre>
             </div>
         </div>
 
-        <div style="background: #f0f7ff; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Реализация в коде:</h3>
-            <p><strong>Файл:</strong> <code>main.py</code>, функция <code>train_system_all()</code> (строки 420-500)</p>
-            <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; overflow-x: auto;">
-deltas = [0.1, 0.2, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0]
-
-for delta in deltas:
-    # Рассчитываем процент качественных для этого Δx
-    quality_percent = (quality_count / total * 100)
-    results[delta] = quality_percent
-
-# Находим Δx с минимальным отклонением от 50%
-best_delta = min(deltas, key=lambda d: abs(results[d] - 50))</pre>
-        </div>
-
         <div style="margin-top: 1.5rem; background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
             <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Пример с текущими данными:</h3>
             <table style="width: 100%; border-collapse: collapse;">
@@ -328,57 +349,49 @@ best_delta = min(deltas, key=lambda d: abs(results[d] - 50))</pre>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Отклонение от 50%</th>
                 </tr>
                 <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">0.1</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">11</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">37</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">23%</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">27%</td>
+                    <td>0.1</td>
+                    <td>11</td>
+                    <td>37</td>
+                    <td>23%</td>
+                    <td>27%</td>
                 </tr>
                 <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">2.0</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">25</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">23</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border);">52%</td>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border); background: #e8f3ed;"><strong>2%</strong></td>
+                    <td>1.0</td>
+                    <td>25</td>
+                    <td>23</td>
+                    <td>52%</td>
+                    <td>2%</td>
                 </tr>
                 <tr>
-                    <td style="padding: 0.75rem;">5.0</td>
-                    <td style="padding: 0.75rem;">36</td>
-                    <td style="padding: 0.75rem;">12</td>
-                    <td style="padding: 0.75rem;">75%</td>
-                    <td style="padding: 0.75rem;">25%</td>
+                    <td>5.0</td>
+                    <td>36</td>
+                    <td>12</td>
+                    <td>75%</td>
+                    <td>25%</td>
                 </tr>
             </table>
             <p style="margin-top: 1rem; padding: 0.75rem; background: var(--success); color: white; border-radius: 8px; text-align: center;">
-                <strong>Оптимальный Δx = 2.0</strong> (отклонение всего 2% от 50%)
+                <strong>Оптимальный Δx = 1.0</strong> (отклонение всего 2% от 50%)
             </p>
         </div>
     </div>
 
-    <!-- 7. СТАТИСТИКА ПО ХАРАКТЕРИСТИКАМ -->
+    <!-- 7. СТАТИСТИКА ПО ХАРАКТЕРИСТИКАМ (ОБНОВЛЕННАЯ) -->
     <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
         <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">7. Статистика по характеристикам</h2>
 
         <div style="background: #f0f7ff; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">
             <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Расчет средних градаций:</h3>
-            <p><strong>Файл:</strong> <code>main.py</code>, функция <code>get_characteristic_stats()</code> (строки 160-200)</p>
             <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; overflow-x: auto;">
 # Для каждой характеристики собираем все градации
 gradations = []
 for v in ch_values:
-    x = v['real_value']
-    xmin = v['min_norm']
-    xmax = v['max_norm']
-    dx = delta_x
-    
-    if xmin <= x <= xmax:
-        g = 2
-    elif x > xmax:
-        g = int((x - xmax) / dx) + 1
-    else:
-        g = int((xmin - x) / dx) + 1
-    
-    g = max(2, min(g, 100))
+    g = calculate_gradations(
+        v['real_value'],
+        v['min_norm'],
+        v['max_norm'],
+        delta_x
+    )
     gradations.append(g)
 
 # Среднее значение
@@ -386,119 +399,119 @@ avg_g = sum(gradations) / len(gradations) if gradations else 0</pre>
         </div>
 
         <div style="background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Данные для Δx=2.0:</h3>
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Данные для разных Δx (только средние градации):</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
                     <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Характеристика</th>
-                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Средние градации</th>
-                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Количество измерений</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Δx=0.1</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Δx=1.0</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Δx=5.0</th>
+                    <th style="padding: 0.75rem; border-bottom: 2px solid var(--border);">Вклад в Co (при Δx=1.0)</th>
                 </tr>
-                <tr><td>Состав ткани</td><td>2.5</td><td>48</td></tr>
-                <tr><td>Плотность ткани</td><td>4.15</td><td>48</td></tr>
-                <tr><td>Устойчивость окраски</td><td>2.0</td><td>48</td></tr>
-                <tr><td>Усадка после стирки</td><td>2.08</td><td>48</td></tr>
-                <tr><td>Прочность швов</td><td>2.25</td><td>48</td></tr>
-                <tr><td>Соответствие размеру</td><td>2.58</td><td>48</td></tr>
-                <tr><td>Качество упаковки</td><td>2.0</td><td>48</td></tr>
-                <tr><td>Износостойкость</td><td>2.0</td><td>48</td></tr>
+                <tr><td>Состав ткани</td><td>24.5</td><td>2.5</td><td>2.0</td><td>12.5%</td></tr>
+                <tr><td>Плотность ткани</td><td>38.2</td><td>4.15</td><td>2.1</td><td>20.8%</td></tr>
+                <tr><td>Устойчивость окраски</td><td>18.0</td><td>2.0</td><td>2.0</td><td>10.0%</td></tr>
+                <tr><td>Усадка после стирки</td><td>19.5</td><td>2.08</td><td>2.0</td><td>10.4%</td></tr>
+                <tr><td>Прочность швов</td><td>21.3</td><td>2.25</td><td>2.0</td><td>11.3%</td></tr>
+                <tr><td>Соответствие размеру</td><td>24.8</td><td>2.58</td><td>2.0</td><td>12.9%</td></tr>
+                <tr><td>Качество упаковки</td><td>18.0</td><td>2.0</td><td>2.0</td><td>10.0%</td></tr>
+                <tr><td>Износостойкость</td><td>18.0</td><td>2.0</td><td>2.0</td><td>10.0%</td></tr>
+                <tr style="background: var(--bone); font-weight: 600;">
+                    <td>СРЕДНЕЕ</td>
+                    <td>22.8</td>
+                    <td>2.45</td>
+                    <td>2.01</td>
+                    <td>100%</td>
+                </tr>
             </table>
+            <p style="margin-top: 1rem;"><strong>Наблюдение:</strong> При Δx=5.0 почти все градации равны 2, система "не видит" отклонения. При Δx=0.1 градации огромные, система "паникует" от каждого чиха.</p>
         </div>
     </div>
 
-    <!-- 8. ВЕСА ХАРАКТЕРИСТИК -->
+    <!-- 8. ПОЛНЫЙ АЛГОРИТМ РАБОТЫ СППР -->
     <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
-        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">8. Веса характеристик (круговая диаграмма)</h2>
-
-        <div style="background: #f0f7ff; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Данные из БД:</h3>
-            <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px;">
-INSERT INTO characteristics (name, unit, delta_x_default, weight, description) VALUES
-('Состав ткани', '%', 1.0, 25, 'Процентное содержание основного волокна'),
-('Плотность ткани', 'г/м²', 10.0, 20, 'Вес квадратного метра ткани'),
-('Устойчивость окраски', 'баллы', 0.5, 20, 'По 5-балльной шкале (1-5)'),
-('Усадка после стирки', '%', 0.5, 15, 'Процент уменьшения размера после стирки'),
-('Прочность швов', 'Н/см', 5.0, 20, 'Нагрузка до разрыва'),
-('Соответствие размеру', 'мм', 2.0, 25, 'Отклонение от заявленного размера'),
-('Качество упаковки', 'баллы', 0.5, 15, 'Внешний вид и целостность упаковки'),
-('Износостойкость', 'баллы', 0.5, 20, 'Оценка износостойкости по 10-балльной шкале');</pre>
-        </div>
-
-        <div style="background: #fff2e0; padding: 1.5rem; border-radius: 12px;">
-            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">Расчет процентов для круговой диаграммы:</h3>
-            <p><strong>Файл:</strong> <code>spzr_dashboard.html</code>, функция <code>loadWeightChart()</code></p>
-            <pre style="background: #1e2b3a; color: #f8f5f0; padding: 1rem; border-radius: 8px; overflow-x: auto;">
-// Сумма всех весов = 25+20+20+15+20+25+15+20 = 160
-// Процент = (weight / 160) * 100
-
-tooltip: {
-    callbacks: {
-        label: function(context) {
-            const value = context.raw;
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percentage = Math.round((value / total) * 100);
-            return `${context.label}: ${value} (${percentage}%)`;
-        }
-    }
-}</pre>
-        </div>
-    </div>
-
-    <!-- 9. ПОЛНЫЙ АЛГОРИТМ -->
-    <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
-        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">9. Полный алгоритм работы СППР</h2>
+        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">8. Полный алгоритм работы СППР (исправленный)</h2>
 
         <div style="background: #1e2b3a; color: #f8f5f0; padding: 2rem; border-radius: 12px; font-family: monospace; line-height: 1.8;">
-            <p>1. Для каждой характеристики товара:</p>
-            <p style="margin-left: 2rem;">   если x в пределах [xmin, xmax]: n = 2</p>
-            <p style="margin-left: 2rem;">   иначе если x > xmax: n = (x - xmax)/Δx + 1</p>
-            <p style="margin-left: 2rem;">   иначе: n = (xmin - x)/Δx + 1</p>
-            <p>2. Вычисляем log₂(n) для каждой характеристики</p>
-            <p>3. Суммируем: Co = Σ log₂(n)</p>
-            <p>4. Ch = количество характеристик (N)</p>
-            <p>5. Go = Co / Ch</p>
-            <p>6. P = exp(-ln2 / Go²)</p>
-            <p>7. Если P ≤ 0.5 → товар качественный</p>
-            <p>   Если P > 0.5 → товар брак</p>
+            <p>// ШАГ 1: Базовый вердикт (вычисляется один раз, не зависит от текущего Δx)</p>
+            <p style="margin-left: 1rem;">base_delta = 1.0</p>
+            <p style="margin-left: 1rem;">Для каждой характеристики:</p>
+            <p style="margin-left: 2rem;">   n = calculate_gradations(x, xmin, xmax, base_delta)</p>
+            <p style="margin-left: 2rem;">   base_sum_log2 += log2(n)</p>
+            <p style="margin-left: 1rem;">base_Go = base_sum_log2 / N</p>
+            <p style="margin-left: 1rem;">base_P = exp(-ln2 / base_Go²)</p>
+            <p style="margin-left: 1rem;"><strong>is_quality = base_P ≤ 0.5  // ЭТО ОКОНЧАТЕЛЬНЫЙ ВЕРДИКТ</strong></p>
+            <p> </p>
+            <p>// ШАГ 2: Текущий расчет для визуализации (с заданным Δx)</p>
+            <p style="margin-left: 1rem;">current_delta = значение из слайдера</p>
+            <p style="margin-left: 1rem;">Для каждой характеристики:</p>
+            <p style="margin-left: 2rem;">   n = calculate_gradations(x, xmin, xmax, current_delta)</p>
+            <p style="margin-left: 2rem;">   current_sum_log2 += log2(n)</p>
+            <p style="margin-left: 1rem;">current_Co = current_sum_log2</p>
+            <p style="margin-left: 1rem;">current_Go = current_Co / N</p>
+            <p style="margin-left: 1rem;">current_P = exp(-ln2 / current_Go²)</p>
+            <p> </p>
+            <p>// ШАГ 3: Отображение</p>
+            <p style="margin-left: 1rem;">Показываем пользователю: текущие n, log2(n), Co, Go, P</p>
+            <p style="margin-left: 1rem;">НО вердикт берем из ШАГА 1 (base_P ≤ 0.5)</p>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding: 1rem; background: #e8f3ed; border-radius: 8px;">
+            <p><strong>✨ Преимущества такого подхода:</strong></p>
+            <ul>
+                <li>Пользователь может играться с Δx и видеть, как меняется чувствительность системы</li>
+                <li>Но при этом базовая классификация остается стабильной и соответствует методичке</li>
+                <li>Можно обучать систему, подбирая оптимальный Δx для наилучшего разделения</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 9. ЧАСТО ЗАДАВАЕМЫЕ ВОПРОСЫ -->
+    <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
+        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">❓ Часто задаваемые вопросы</h2>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <p style="font-weight: 600; color: var(--deep-ink);">Вопрос: Почему при изменении Δx не меняется количество качественных товаров?</p>
+            <p style="background: var(--bone); padding: 1rem; border-radius: 8px;">Ответ: Потому что вердикт вычисляется один раз с фиксированным Δx=1.0. Δx влияет только на отображение градаций, но не на сам факт качества. Это сделано в соответствии с методичкой.</p>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <p style="font-weight: 600; color: var(--deep-ink);">Вопрос: Почему у некоторых товаров все градации = 2 даже при малом Δx?</p>
+            <p style="background: var(--bone); padding: 1rem; border-radius: 8px;">Ответ: Это значит, что все характеристики товара находятся строго в пределах нормы. Для таких товаров даже при самом чувствительном Δx градации остаются равными 2.</p>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <p style="font-weight: 600; color: var(--deep-ink);">Вопрос: Зачем тогда нужен слайдер Δx, если он не меняет вердикт?</p>
+            <p style="background: var(--bone); padding: 1rem; border-radius: 8px;">Ответ: Слайдер показывает, насколько сильно система "чувствует" отклонения. При малом Δx даже небольшое отклонение дает большую градацию, при большом Δx - маленькую. Это помогает понять, какие характеристики вносят наибольший вклад и какова чувствительность системы.</p>
+        </div>
+        
+        <div>
+            <p style="font-weight: 600; color: var(--deep-ink);">Вопрос: Как обучить систему?</p>
+            <p style="background: var(--bone); padding: 1rem; border-radius: 8px;">Ответ: Кнопка "Подобрать оптимальный Δx" находит такое значение Δx, при котором процент качественных товаров ближе всего к 50%. Это значение можно использовать как наиболее сбалансированное для данной выборки.</p>
         </div>
     </div>
 
     <!-- 10. ГДЕ ИСКАТЬ В КОДЕ -->
     <div style="background: white; border-radius: 16px; padding: 2rem; border: 1px solid var(--border);">
-        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">10. Расположение в коде</h2>
+        <h2 style="color: var(--deep-ink); margin-bottom: 1.5rem;">🔍 Расположение в коде</h2>
 
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
             <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px;">
                 <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">main.py</h3>
                 <ul>
-                    <li><code>analyze_all_quality()</code> — строки 200-350 (основные вычисления)</li>
-                    <li><code>get_product_detail()</code> — строки 350-420 (детали товара)</li>
+                    <li><code>calculate_gradations()</code> — строки 25-40 (новая функция с math.ceil)</li>
+                    <li><code>analyze_all_quality()</code> — строки 200-350 (разделение на базовый и текущий расчет)</li>
+                    <li><code>get_product_detail()</code> — строки 350-420 (детали товара с обоими P)</li>
                     <li><code>train_system_all()</code> — строки 420-500 (обучение)</li>
-                    <li><code>get_characteristic_stats()</code> — строки 160-200 (статистика)</li>
                 </ul>
             </div>
             <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px;">
                 <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">spzr_dashboard.html</h3>
                 <ul>
-                    <li><code>loadAnalysis()</code> — загрузка данных</li>
-                    <li><code>renderTable()</code> — отрисовка таблицы с P ≤ 0.5</li>
-                    <li><code>displayModal()</code> — детальный расчет</li>
-                    <li><code>loadWeightChart()</code> — круговая диаграмма</li>
-                    <li><code>updateGradationsChart()</code> — столбчатая диаграмма</li>
-                </ul>
-            </div>
-            <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px;">
-                <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">database.py</h3>
-                <ul>
-                    <li><code>execute_query()</code> — выполнение SQL</li>
-                    <li><code>get_table_count()</code> — подсчет записей</li>
-                    <li><code>get_table_data()</code> — получение данных</li>
-                </ul>
-            </div>
-            <div style="background: var(--bone); padding: 1.5rem; border-radius: 12px;">
-                <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">init.sql</h3>
-                <ul>
-                    <li>Строки 250-300 — генерация данных с CASE</li>
-                    <li>Строки 340-360 — статистика по браку</li>
+                    <li><code>loadAnalysis()</code> — загрузка данных с разделением вердикта</li>
+                    <li><code>displayModal()</code> — отображение базового и текущего P</li>
+                    <li><code>renderCharacteristicStats()</code> — таблица без столбца с количеством</li>
+                    <li><code>sortResults()</code> — 10 вариантов сортировки</li>
                 </ul>
             </div>
         </div>

@@ -9,22 +9,29 @@
     <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
         <!-- Левая панель: редактор -->
         <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
-            <h3 style="color: var(--dark); margin-bottom: 1rem;">📝 SQL запрос</h3>
+            <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">📝 SQL запрос</h3>
             
             <div style="margin-bottom: 1rem;">
-                <textarea id="sqlQuery" style="width: 100%; height: 180px; padding: 1rem; font-family: 'Courier New', monospace; background: #1e2b3a; color: #f8f5f0; border-radius: 12px; border: none; font-size: 0.9rem;" 
+                <textarea id="sqlQuery" style="width: 100%; height: 200px; padding: 1rem; font-family: 'Courier New', monospace; background: #1e2b3a; color: #f8f5f0; border-radius: 12px; border: none; font-size: 0.9rem; resize: vertical;" 
                     placeholder="SELECT * FROM products LIMIT 100">{% if request.query_params.get('table') %}SELECT * FROM {{ request.query_params.get('table') }} LIMIT 100{% else %}SELECT 
     s.name AS supplier,
     p.name AS product,
     c.name AS characteristic,
     pc.real_value,
     pc.min_norm,
-    pc.max_norm
+    pc.max_norm,
+    CASE 
+        WHEN pc.real_value BETWEEN pc.min_norm AND pc.max_norm THEN '✓ в норме'
+        WHEN pc.real_value < pc.min_norm THEN '▼ ниже нормы'
+        ELSE '▲ выше нормы'
+    END AS status
 FROM product_characteristics pc
 JOIN suppliers s ON pc.supplier_id = s.id
 JOIN products p ON pc.product_id = p.id
 JOIN characteristics c ON pc.characteristic_id = c.id
-WHERE pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm
+WHERE p.name ILIKE '%Джинсы%' 
+  AND s.name ILIKE '%Текстиль%'
+ORDER BY s.name, p.name, c.name
 LIMIT 50{% endif %}</textarea>
             </div>
             
@@ -35,63 +42,97 @@ LIMIT 50{% endif %}</textarea>
                 <button onclick="exportQuery('excel')" class="btn btn-success">
                     ⬇️ Excel
                 </button>
-                <button onclick="exportQuery('json')" class="btn" style="background: var(--accent); color: var(--dark);">
+                <button onclick="exportQuery('json')" class="btn" style="background: var(--sand); color: var(--deep-ink);">
                     ⬇️ JSON
                 </button>
                 <button onclick="clearQuery()" class="btn">
                     🧹 Очистить
                 </button>
+                <button onclick="formatQuery()" class="btn">
+                    ✨ Форматировать
+                </button>
             </div>
             
             <div style="background: var(--light); padding: 1rem; border-radius: 12px;">
-                <h4 style="color: var(--dark); margin-bottom: 0.5rem; font-size: 0.95rem;">📌 Примеры</h4>
+                <h4 style="color: var(--deep-ink); margin-bottom: 0.5rem; font-size: 0.95rem;">📌 Примеры запросов</h4>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                     <button onclick="loadExample('quality')" class="btn btn-sm" style="background: white;">✅ Качественная</button>
                     <button onclick="loadExample('defect')" class="btn btn-sm" style="background: white;">❌ Брак</button>
                     <button onclick="loadExample('suppliers')" class="btn btn-sm" style="background: white;">🏭 Поставщики</button>
                     <button onclick="loadExample('stats')" class="btn btn-sm" style="background: white;">📊 Статистика</button>
+                    <button onclick="loadExample('defect_stats')" class="btn btn-sm" style="background: white;">📈 Статистика брака</button>
+                    <button onclick="loadExample('characteristic_stats')" class="btn btn-sm" style="background: white;">📉 По характеристикам</button>
                 </div>
             </div>
         </div>
         
-        <!-- Правая панель: таблицы -->
+        <!-- Правая панель: таблицы и справка (ПОМЕНЯНО МЕСТАМИ) -->
         <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- Справка (теперь сверху) -->
             <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
-                <h3 style="color: var(--dark); margin-bottom: 1rem;">📋 Таблицы</h3>
-                <input type="text" id="tableSearch" class="form-control" placeholder="Поиск..." style="margin-bottom: 1rem;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; max-height: 300px; overflow-y: auto; padding-right: 0.25rem;">
+                <h3 style="color: var(--deep-ink); margin-bottom: 0.75rem;">ℹ️ Справка по таблицам</h3>
+                <div style="background: var(--bone); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <p style="margin-bottom: 0.5rem;"><strong>📋 Основные таблицы:</strong></p>
+                    <ul style="list-style: none; padding: 0; font-size: 0.9rem;">
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0; border-bottom: 1px dashed var(--border);">
+                            <strong>suppliers</strong> — поставщики (id, name, address, phone, contact_person, inn, email)
+                        </li>
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0; border-bottom: 1px dashed var(--border);">
+                            <strong>products</strong> — продукция (id, name, description, category, base_price)
+                        </li>
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0; border-bottom: 1px dashed var(--border);">
+                            <strong>characteristics</strong> — характеристики (id, name, unit, delta_x_default, weight)
+                        </li>
+                        <li style="margin-bottom: 0.5rem; padding: 0.3rem 0;">
+                            <strong>product_characteristics</strong> — связь (id, product_id, supplier_id, characteristic_id, min_norm, max_norm, real_value)
+                        </li>
+                    </ul>
+                </div>
+                
+                <div style="background: #e8f3ed; padding: 1rem; border-radius: 8px;">
+                    <p style="margin-bottom: 0.5rem;"><strong>🔑 Полезные конструкции:</strong></p>
+                    <ul style="margin-left: 1.2rem; font-size: 0.9rem;">
+                        <li><code>ILIKE '%текст%'</code> — регистронезависимый поиск</li>
+                        <li><code>BETWEEN ... AND ...</code> — диапазон значений</li>
+                        <li><code>CASE WHEN ... THEN ... END</code> — условные выражения</li>
+                        <li><code>COUNT(CASE WHEN ... THEN 1 END)</code> — условный подсчет</li>
+                        <li><code>DATE_TRUNC('month', measurement_date)</code> — группировка по месяцам</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Таблицы (теперь снизу) -->
+            <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
+                <h3 style="color: var(--deep-ink); margin-bottom: 1rem;">📋 Список таблиц</h3>
+                <input type="text" id="tableSearch" class="form-control" placeholder="🔍 Поиск таблицы..." style="margin-bottom: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.5rem; max-height: 250px; overflow-y: auto; padding-right: 0.25rem;">
                     {% for table in tables %}
                     <div onclick="insertTableName('{{ table }}')" 
                          style="background: var(--light); padding: 0.6rem; border-radius: 8px; cursor: pointer; text-align: center; border: 1px solid var(--border); transition: 0.1s;"
-                         onmouseover="this.style.background='var(--accent)'; this.style.color='var(--dark)';"
-                         onmouseout="this.style.background='var(--light)'; this.style.color='var(--dark)';">
+                         onmouseover="this.style.background='var(--sand)'; this.style.color='var(--deep-ink)';"
+                         onmouseout="this.style.background='var(--light)'; this.style.color='var(--deep-ink)';">
                         {{ table }}
                     </div>
                     {% endfor %}
                 </div>
-            </div>
-            
-            <div style="background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
-                <h3 style="color: var(--dark); margin-bottom: 0.75rem;">ℹ️ Справка</h3>
-                <ul style="list-style: none; padding: 0; font-size: 0.9rem;">
-                    <li style="margin-bottom: 0.5rem;">• <strong>suppliers</strong> — поставщики</li>
-                    <li style="margin-bottom: 0.5rem;">• <strong>products</strong> — продукция</li>
-                    <li style="margin-bottom: 0.5rem;">• <strong>characteristics</strong> — характеристики</li>
-                    <li style="margin-bottom: 0.5rem;">• <strong>product_characteristics</strong> — нормы и значения</li>
-                </ul>
             </div>
         </div>
     </div>
     
     <!-- Результаты -->
     <div id="queryResults" style="display: none; margin-top: 2rem; background: white; border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <h3 style="color: var(--dark);">📊 Результаты</h3>
-            <span style="background: var(--light); padding: 0.4rem 1rem; border-radius: 40px;">
-                Найдено: <strong id="resultCount">0</strong>
-            </span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <h3 style="color: var(--deep-ink);">📊 Результаты запроса</h3>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <span style="background: var(--bone); padding: 0.4rem 1rem; border-radius: 40px;">
+                    Найдено: <strong id="resultCount">0</strong> записей
+                </span>
+                <span id="queryTime" style="background: var(--bone); padding: 0.4rem 1rem; border-radius: 40px; font-size: 0.85rem;">
+                    ⏱️ <span id="queryTimeValue">0</span> мс
+                </span>
+            </div>
         </div>
-        <div style="overflow-x: auto;">
+        <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
             <table id="resultsTable" class="data-table">
                 <thead>
                     <tr>
@@ -101,10 +142,28 @@ LIMIT 50{% endif %}</textarea>
                 <tbody></tbody>
             </table>
         </div>
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button onclick="exportCurrentResults('excel')" class="btn btn-sm btn-success">📥 Excel</button>
+            <button onclick="exportCurrentResults('json')" class="btn btn-sm" style="background: var(--sand); color: var(--deep-ink);">📥 JSON</button>
+        </div>
+    </div>
+    
+    <!-- Индикатор загрузки -->
+    <div id="loadingIndicator" style="display: none; text-align: center; padding: 2rem;">
+        <div class="loading" style="display: inline-block; padding: 1rem 2rem; border-radius: 40px;">
+            ⏳ Выполнение запроса...
+        </div>
+    </div>
+    
+    <!-- Сообщение об ошибке -->
+    <div id="errorMessage" style="display: none; margin-top: 1rem; background: #fee2e2; color: var(--danger); padding: 1rem; border-radius: 12px; border-left: 4px solid var(--danger);">
     </div>
 </div>
 
 <script>
+let lastResults = null;
+let lastSql = '';
+
 function insertTableName(tableName) {
     const textarea = document.getElementById('sqlQuery');
     const cursorPos = textarea.selectionStart;
@@ -131,8 +190,8 @@ FROM product_characteristics pc
 JOIN suppliers s ON pc.supplier_id = s.id
 JOIN products p ON pc.product_id = p.id
 JOIN characteristics c ON pc.characteristic_id = c.id
-WHERE p.name LIKE '%Джинсы%' AND s.name LIKE '%Текстиль%'
-LIMIT 20`,
+ORDER BY s.name, p.name, c.name
+LIMIT 50;`,
         
         defect: `SELECT 
     s.name AS supplier,
@@ -150,30 +209,127 @@ FROM product_characteristics pc
 JOIN suppliers s ON pc.supplier_id = s.id
 JOIN products p ON pc.product_id = p.id
 JOIN characteristics c ON pc.characteristic_id = c.id
-WHERE (pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm)
+WHERE pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm
+ORDER BY s.name, p.name, c.name
 LIMIT 20`,
         
         suppliers: `SELECT 
-    id, name, address, phone, contact_person
+    id, 
+    name, 
+    address, 
+    phone, 
+    contact_person,
+    inn,
+    email
 FROM suppliers
 ORDER BY name`,
         
         stats: `SELECT 
     p.name AS product,
-    COUNT(pc.id) AS total_checks,
-    ROUND(AVG(pc.real_value), 2) AS avg_value,
-    MIN(pc.min_norm) AS min_norm,
-    MAX(pc.max_norm) AS max_norm,
-    COUNT(CASE WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm THEN 1 END) AS defects
+    p.category,
+    COUNT(DISTINCT pc.id) AS total_checks,
+    COUNT(DISTINCT pc.characteristic_id) AS unique_characteristics,
+    ROUND(AVG(pc.real_value)::numeric, 2) AS avg_value,
+    MIN(pc.min_norm) AS min_norm_all,
+    MAX(pc.max_norm) AS max_norm_all,
+    COUNT(CASE 
+        WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+        THEN 1 
+    END) AS defects,
+    ROUND(
+        100.0 * COUNT(CASE 
+            WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+            THEN 1 
+        END) / NULLIF(COUNT(pc.id), 0), 
+        2
+    ) AS defect_percent
 FROM products p
 LEFT JOIN product_characteristics pc ON p.id = pc.product_id
-GROUP BY p.id, p.name
-ORDER BY defects DESC`
+GROUP BY p.id, p.name, p.category
+HAVING COUNT(pc.id) > 0
+ORDER BY defects DESC, defect_percent DESC`,
+        
+        defect_stats: `SELECT 
+    c.name AS characteristic,
+    c.unit,
+    COUNT(*) AS total_measurements,
+    COUNT(CASE 
+        WHEN pc.real_value < pc.min_norm THEN 1 
+    END) AS below_norm,
+    COUNT(CASE 
+        WHEN pc.real_value > pc.max_norm THEN 1 
+    END) AS above_norm,
+    COUNT(CASE 
+        WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+        THEN 1 
+    END) AS total_defects,
+    ROUND(
+        100.0 * COUNT(CASE 
+            WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+            THEN 1 
+        END) / COUNT(*), 
+        2
+    ) AS defect_percent
+FROM product_characteristics pc
+JOIN characteristics c ON pc.characteristic_id = c.id
+GROUP BY c.id, c.name, c.unit
+ORDER BY total_defects DESC, defect_percent DESC`,
+        
+        characteristic_stats: `WITH product_stats AS (
+    SELECT 
+        p.id AS product_id,
+        p.name AS product_name,
+        p.category,
+        s.id AS supplier_id,
+        s.name AS supplier_name,
+        COUNT(pc.id) AS total_chars,
+        COUNT(CASE 
+            WHEN pc.real_value BETWEEN pc.min_norm AND pc.max_norm 
+            THEN 1 
+        END) AS in_norm,
+        COUNT(CASE 
+            WHEN pc.real_value < pc.min_norm OR pc.real_value > pc.max_norm 
+            THEN 1 
+        END) AS defects
+    FROM products p
+    CROSS JOIN suppliers s
+    LEFT JOIN product_characteristics pc 
+        ON p.id = pc.product_id AND s.id = pc.supplier_id
+    GROUP BY p.id, p.name, p.category, s.id, s.name
+)
+SELECT 
+    product_name,
+    category,
+    supplier_name,
+    total_chars,
+    in_norm,
+    defects,
+    ROUND(100.0 * defects / NULLIF(total_chars, 0), 2) AS defect_percent,
+    CASE 
+        WHEN defects = 0 THEN '✓ Идеально'
+        WHEN defects <= 2 THEN '✓ Хорошо'
+        WHEN defects <= 4 THEN '⚠ Средне'
+        ELSE '✗ Плохо'
+    END AS quality_rating
+FROM product_stats
+WHERE total_chars > 0
+ORDER BY defect_percent DESC, product_name`
     };
     
     if (examples[type]) {
         document.getElementById('sqlQuery').value = examples[type];
     }
+}
+
+function formatQuery() {
+    const sql = document.getElementById('sqlQuery').value;
+    // Простое форматирование - добавляем отступы после ключевых слов
+    const formatted = sql
+        .replace(/\b(SELECT|FROM|WHERE|JOIN|LEFT JOIN|INNER JOIN|GROUP BY|ORDER BY|HAVING|LIMIT|AND|OR|CASE|WHEN|THEN|ELSE|END)\b/gi, '\n$1')
+        .replace(/\s+/g, ' ')
+        .replace(/\(\s/g, '(')
+        .replace(/\s\)/g, ')');
+    document.getElementById('sqlQuery').value = formatted;
 }
 
 async function executeQuery() {
@@ -183,20 +339,39 @@ async function executeQuery() {
         return;
     }
     
-    const response = await fetch('/api/query/execute', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({sql: sql, params: '{}'})
-    });
+    lastSql = sql;
     
-    const result = await response.json();
+    // Показываем индикатор загрузки
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('queryResults').style.display = 'none';
+    document.getElementById('errorMessage').style.display = 'none';
     
-    if (result.success) {
-        displayResults(result.data);
-        document.getElementById('resultCount').textContent = result.count;
-        document.getElementById('queryResults').style.display = 'block';
-    } else {
-        alert('❌ ' + result.error);
+    const startTime = performance.now();
+    
+    try {
+        const response = await fetch('/api/query/execute', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({sql: sql})
+        });
+        
+        const endTime = performance.now();
+        document.getElementById('queryTimeValue').textContent = Math.round(endTime - startTime);
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            lastResults = result.data;
+            displayResults(result.data);
+            document.getElementById('resultCount').textContent = result.count || 0;
+            document.getElementById('queryResults').style.display = 'block';
+        } else {
+            showError(result.error || 'Ошибка выполнения запроса');
+        }
+    } catch (e) {
+        showError('Ошибка соединения: ' + e.message);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
     }
 }
 
@@ -204,27 +379,39 @@ function displayResults(data) {
     const table = document.getElementById('resultsTable');
     
     if (!data || data.length === 0) {
-        table.innerHTML = '<tr><td style="text-align: center; padding: 2rem;">Нет данных</td></tr>';
+        table.innerHTML = '<thead><tr><th>Результат</th></tr></thead><tbody><tr><td style="text-align: center; padding: 2rem;">Запрос выполнен успешно, но не вернул данных</td></tr>';
         return;
     }
     
     const headers = Object.keys(data[0]);
-    let html = '<thead><tr>';
-    headers.forEach(h => html += `<th>${h}</th>`);
-    html += '</tr></thead><tbody>';
+    let thead = '<thead><tr>';
+    headers.forEach(h => thead += `<th>${h}</th>`);
+    thead += '</tr></thead>';
     
+    let tbody = '<tbody>';
     data.forEach(row => {
-        html += '<tr>';
+        tbody += '<tr>';
         headers.forEach(h => {
             let val = row[h];
-            if (val === null || val === undefined) val = '<span class="null-value">NULL</span>';
-            html += `<td>${val}</td>`;
+            if (val === null || val === undefined) {
+                val = '<span class="null-value">NULL</span>';
+            } else if (typeof val === 'object') {
+                val = JSON.stringify(val);
+            } else {
+                val = String(val);
+            }
+            tbody += `<td>${val}</td>`;
         });
-        html += '</tr>';
+        tbody += '</tr>';
     });
-    html += '</tbody>';
+    tbody += '</tbody>';
     
-    table.innerHTML = html;
+    table.innerHTML = thead + tbody;
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').style.display = 'block';
+    document.getElementById('errorMessage').textContent = '❌ ' + message;
 }
 
 async function exportQuery(format) {
@@ -234,42 +421,90 @@ async function exportQuery(format) {
         return;
     }
     
+    await exportData(sql, format, 'query_result');
+}
+
+async function exportCurrentResults(format) {
+    if (!lastResults || lastResults.length === 0) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+    
+    await exportData(lastSql, format, 'current_results', lastResults);
+}
+
+async function exportData(sql, format, prefix, data = null) {
     const formData = new FormData();
     formData.append('sql', sql);
-    formData.append('params', '{}');
-    formData.append('format', format === 'excel' ? 'csv' : 'json');
+    formData.append('format', format === 'excel' ? 'excel' : 'json');
+    if (data) {
+        formData.append('data', JSON.stringify(data));
+    }
     
-    const response = await fetch('/api/query/export', {
-        method: 'POST',
-        body: formData
-    });
-    
-    if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `query_result_${Date.now()}.${format === 'excel' ? 'xlsx' : 'json'}`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-    } else {
-        const err = await response.json();
-        alert('❌ ' + err.error);
+    try {
+        const response = await fetch('/api/query/export', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${prefix}_${Date.now()}.${format === 'excel' ? 'xlsx' : 'json'}`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } else {
+            const err = await response.json();
+            alert('❌ ' + (err.error || 'Ошибка экспорта'));
+        }
+    } catch (e) {
+        alert('❌ Ошибка: ' + e.message);
     }
 }
 
 function clearQuery() {
     document.getElementById('sqlQuery').value = '';
     document.getElementById('queryResults').style.display = 'none';
+    document.getElementById('errorMessage').style.display = 'none';
+    lastResults = null;
 }
 
 // Поиск таблиц
 document.getElementById('tableSearch')?.addEventListener('keyup', function(e) {
     const search = e.target.value.toLowerCase();
-    document.querySelectorAll('[onclick="insertTableName(\'').forEach(el => {
+    const tables = document.querySelectorAll('[onclick^="insertTableName"]');
+    tables.forEach(el => {
         const name = el.textContent.toLowerCase();
         el.style.display = name.includes(search) ? 'block' : 'none';
     });
 });
+
+// Добавляем подсветку синтаксиса (простая)
+document.getElementById('sqlQuery')?.addEventListener('keyup', function() {
+    // Можно добавить подсветку, но пока оставим как есть
+});
 </script>
+
+<style>
+.null-value {
+    color: #999;
+    font-style: italic;
+}
+#resultsTable {
+    font-size: 0.9rem;
+}
+#resultsTable td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#resultsTable td:hover {
+    white-space: normal;
+    word-wrap: break-word;
+    background: var(--bone);
+}
+</style>
 {% endblock %}
